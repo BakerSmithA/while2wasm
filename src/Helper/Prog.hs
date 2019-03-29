@@ -4,7 +4,13 @@
 
 {-# LANGUAGE DeriveFunctor, ExistentialQuantification, DataKinds, Rank2Types #-}
 
-module Helper.Prog where
+module Helper.Prog
+( Prog(..)
+, Nat(..)
+, Alg(..)
+, fold
+, run
+) where
 
 data Prog f g a
     -- Leaf node
@@ -37,12 +43,6 @@ instance (Functor f, Functor g) => Monad (Prog f g) where
 
 data Nat = Z | S Nat
 
--- Note, when folding using algebra, you fold from leaves upwards. Therefore,
--- `p` is called before `d`.
---
--- `Nat` is used to tell how deep you are in the scope (?)
---
--- `a` is the carrier (?)
 data Alg f g a = A {
     -- Algebra for normal instructions, i.e. with Op
     a :: forall n. f (a n) -> a n

@@ -1,3 +1,4 @@
+
 -- Coproduct for use with Datatypes a la Carte and Extensible effects.
 
 {-# LANGUAGE TypeOperators #-}
