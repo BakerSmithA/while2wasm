@@ -76,4 +76,4 @@ run gen alg prog = fold alg (fmap gen prog)
 -- creation of Prog tree.
 
 class Progable p f g where
-    prog :: p -> Prog f g a
+    prog :: p -> Prog f g ()

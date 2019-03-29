@@ -35,15 +35,21 @@ data BExp k
 type VarDecls  v k = [(v, k)]
 type ProcDecls v k = [(v, k)]
 
--- Statements regarding procedures, where procedure names are represented
--- as strings.
-data IProcStm k
-    = Call Ident k
-    deriving Functor
+mapVs :: (k -> b) -> VarDecls v k -> VarDecls v b
+mapVs f = map (\(v, x) -> (v, f x))
+
+mapPs :: (k -> b) -> ProcDecls v k -> ProcDecls v b
+mapPs f = map (\(v, s) -> (v, f s))
 
 -- Statements involving variables, where variable names are represented as strings.
 data IVarStm k
     = SetVar Ident k k
+    deriving Functor
+
+-- Statements regarding procedures, where procedure names are represented
+-- as strings.
+data IProcStm k
+    = Call Ident k
     deriving Functor
 
 -- Instructions with continuations.
@@ -105,15 +111,15 @@ andB x y = inject (And x y)
 notB :: BExp :<: f => Prog f g a -> Prog f g a
 notB x = inject (Not x)
 
--- IProcStm
-
-call :: IProcStm :<: f => Ident -> Prog f g ()
-call func = inject (Call func (Var ()))
-
 -- IVarStm
 
 setVar :: IVarStm :<: f => Ident -> Prog f g () -> Prog f g ()
 setVar v x = inject (SetVar v x (Var ()))
+
+-- IProcStm
+
+call :: IProcStm :<: f => Ident -> Prog f g ()
+call func = inject (Call func (Var ()))
 
 -- Stm
 
