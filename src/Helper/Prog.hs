@@ -3,11 +3,13 @@
 --  https://people.cs.kuleuven.be/~tom.schrijvers/Research/papers/lics2018.pdf
 
 {-# LANGUAGE DeriveFunctor, ExistentialQuantification, DataKinds, Rank2Types #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Helper.Prog
 ( Prog(..)
 , Nat(..)
 , Alg(..)
+, Progable(..)
 , fold
 , run
 ) where
@@ -65,3 +67,13 @@ fold alg (Scope sc) = d alg (fmap (fold alg . fmap (p alg . fold alg)) sc)
 
 run :: (Functor f, Functor g) => (r -> a Z) -> Alg f g a -> (Prog f g r -> a Z)
 run gen alg prog = fold alg (fmap gen prog)
+
+--------------------------------------------------------------------------------
+-- Conversion from Recursive
+--------------------------------------------------------------------------------
+
+-- Like Freeable typeclass for Free trees (see LangEng slides), but allows
+-- creation of Prog tree.
+
+class Progable p f g where
+    prog :: p -> Prog f g a
