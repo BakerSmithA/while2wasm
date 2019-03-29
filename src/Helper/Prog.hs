@@ -2,10 +2,7 @@
 -- Implementation of Prog from:
 --  https://people.cs.kuleuven.be/~tom.schrijvers/Research/papers/lics2018.pdf
 
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE DeriveFunctor, ExistentialQuantification, DataKinds, Rank2Types #-}
 
 module Helper.Prog where
 
