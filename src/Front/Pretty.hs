@@ -12,11 +12,10 @@ import Helper.Pretty
 import Helper.Alg
 import Helper.Co
 
-type DocCarrier = CarrierM Doc ()
+type DocCarrier = CarrierId (Doc ())
 
 instance OpAlg IVarExp DocCarrier where
-    alg :: IVarExp (DocCarrier n) -> DocCarrier n
-    alg (GetVar v) = undefined
+    alg (GetVar v) = Id (text v)
 
 instance OpAlg AExp DocCarrier where
     alg = undefined
@@ -25,7 +24,7 @@ instance OpAlg BExp DocCarrier where
     alg = undefined
 
 instance OpAlg IVarStm DocCarrier where
-    alg (SetVar v (M x) (M k)) = M (do text v; text " := "; x; nl; k)
+    alg (SetVar v (Id x) (Id k)) = Id (do text v; text " := "; x; nl; k)
 
 instance OpAlg IProcStm DocCarrier where
     alg = undefined
@@ -43,4 +42,5 @@ type X = IVarExp :+: AExp :+: BExp :+: IVarStm :+: IProcStm :+: Stm
 type Y = ScopeStm :+: IBlockStm
 
 docAST :: Prog X Y () -> Doc ()
-docAST = evalM
+docAST = evalId gen where
+    gen x = Id (return x)

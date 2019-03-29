@@ -111,9 +111,6 @@ runM alg prog = case run genM alg prog of
 -- Use if do not care about nesting?
 data CarrierId a (n :: Nat) = Id a
 
-genId :: a -> CarrierId a 'Z
-genId = Id
-
-runId :: (Functor f, Functor g) => Alg f g (CarrierId a) -> Prog f g a -> a
-runId alg prog = case run genId alg prog of
+runId :: (Functor f, Functor g) => (r -> CarrierId a 'Z) -> Alg f g (CarrierId a) -> Prog f g r -> a
+runId gen alg prog = case run gen alg prog of
     (Id x) -> x

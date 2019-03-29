@@ -11,6 +11,7 @@ module Helper.Alg
 , Pro
 , eval
 , evalM
+, evalId
 ) where
 
 import Helper.Prog
@@ -41,8 +42,8 @@ evalM = runM alg' where
     alg' = A alg dem pro
     pro (M x) = M (return (CSM x))
 
-evalId :: (OpAlg f (CarrierId a), ScopeAlg g (CarrierId a)) => Prog f g a -> a
-evalId = runId alg' where
+evalId :: (OpAlg f (CarrierId a), ScopeAlg g (CarrierId a)) => (r -> CarrierId a 'Z) -> Prog f g r -> a
+evalId gen = runId gen alg' where
     alg' = A alg dem pro
     pro (Id x) = Id x
 
