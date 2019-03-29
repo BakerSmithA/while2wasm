@@ -62,7 +62,6 @@ instance ScopeAlg IBlockStm DocCarrier where
     dem (Block vs ps (Id b)) =
         let docVs = map docVarDecl  vs `sepByEnd` nl
             docPs = map docProcDecl ps `sepByEnd` nl
-
         in Id $ do
             text "begin"; nl
             indented (do
@@ -76,7 +75,8 @@ docVarDecl (v, (Id x)) = do text "var "; text v; text " := "; x; text ";"
 
 docProcDecl :: (Ident, DocCarrier ('S n)) -> Doc ()
 docProcDecl (f, (Id body)) = do
-    text "proc "; text f; text " is "; parens (do nl; indented body)
+    text "proc "; text f; text " is ";
+    parens (do nl; indented body)
     text ";"
 
 type X = IVarExp :+: AExp :+: BExp :+: IVarStm :+: IProcStm :+: Stm
