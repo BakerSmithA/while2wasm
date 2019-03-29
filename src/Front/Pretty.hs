@@ -3,6 +3,7 @@
 
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 {-# LANGUAGE TypeOperators, DataKinds #-}
+{-# LANGUAGE InstanceSigs #-}
 
 module Front.Pretty where
 
@@ -14,7 +15,8 @@ import Helper.Co
 type DocCarrier = CarrierM Doc ()
 
 instance OpAlg IVarExp DocCarrier where
-    alg = undefined
+    alg :: IVarExp (DocCarrier n) -> DocCarrier n
+    alg (GetVar v) = M _
 
 instance OpAlg AExp DocCarrier where
     alg = undefined
@@ -41,6 +43,4 @@ type X = IVarExp :+: AExp :+: BExp :+: IVarStm :+: IProcStm :+: Stm
 type Y = ScopeStm :+: IBlockStm
 
 docAST :: Prog X Y () -> Doc ()
-docAST = evalM pro where
-    pro :: CarrierM Doc a n -> CarrierM Doc a ('S n)
-    pro (M x) = M (return (CSM x))
+docAST = evalM
