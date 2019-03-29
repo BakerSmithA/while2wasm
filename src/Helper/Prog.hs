@@ -2,7 +2,8 @@
 -- Implementation of Prog from:
 --  https://people.cs.kuleuven.be/~tom.schrijvers/Research/papers/lics2018.pdf
 
-{-# LANGUAGE DeriveFunctor, ExistentialQuantification, DataKinds, Rank2Types #-}
+{-# LANGUAGE DeriveFunctor, ExistentialQuantification #-}
+{-# LANGUAGE DataKinds, Rank2Types, KindSignatures, GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Helper.Prog
@@ -10,8 +11,11 @@ module Helper.Prog
 , Nat(..)
 , Alg(..)
 , Progable(..)
+, CarrierM(..)
+, CarrierM'(..)
 , fold
 , run
+, runM
 ) where
 
 data Prog f g a
@@ -65,7 +69,7 @@ fold alg (Scope sc) = d alg (fmap (fold alg . fmap (p alg . fold alg)) sc)
 -- unindexed return type `r` into the indexed carrier type `a Z` before
 -- folding over the structure.
 
-run :: (Functor f, Functor g) => (r -> a Z) -> Alg f g a -> (Prog f g r -> a Z)
+run :: (Functor f, Functor g) => (r -> a Z) -> Alg f g a -> Prog f g r -> a Z
 run gen alg prog = fold alg (fmap gen prog)
 
 --------------------------------------------------------------------------------
@@ -77,3 +81,20 @@ run gen alg prog = fold alg (fmap gen prog)
 
 class Progable p f g where
     prog :: p -> Prog f g ()
+
+-- Covenience carrier for converting Prog trees to be wrapped in monad context.
+-- `n` nested monads representing result at each level of scope.
+data CarrierM m a n = M (m (CarrierM' m a n))
+
+data CarrierM' m a :: Nat -> * where
+    CZM :: a -> CarrierM' m a 'Z
+    CSM :: m (CarrierM' m a n) -> CarrierM' m a ('S n)
+
+genM :: (Monad m) => a -> CarrierM m a 'Z
+genM x = M (return (CZM x))
+
+runM :: (Monad m, Functor f, Functor g) => Alg f g (CarrierM m a) -> Prog f g a -> m a
+runM alg prog = case run genM alg prog of
+    (M prog') -> do
+        (CZM x) <- prog'
+        return x

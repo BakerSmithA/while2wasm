@@ -1,7 +1,7 @@
 
 -- Used to define algebras for use with Datatypes a la Carte methods.
 
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, TypeOperators #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, TypeOperators, FlexibleContexts #-}
 {-# LANGUAGE DataKinds, KindSignatures, RankNTypes #-}
 
 module Helper.Alg
@@ -10,6 +10,7 @@ module Helper.Alg
 , ScopeAlg(..)
 , Pro
 , eval
+, evalM
 ) where
 
 import Helper.Prog
@@ -30,8 +31,14 @@ type Pro a = forall (n :: Nat). a n -> a ('S n)
 -- Like `run`, except algebra is taken from typeclass instead of passed in.
 -- However, still need to pass in promotion function since this is not
 -- in a typeclass.
-eval :: (OpAlg f a, ScopeAlg g a) => (r -> a 'Z) -> Pro a -> (Prog f g r -> a 'Z)
+eval :: (OpAlg f a, ScopeAlg g a) => (r -> a 'Z) -> Pro a -> Prog f g r -> a 'Z
 eval gen pro = run gen alg' where
+    alg' = A alg dem pro
+
+-- Like `runM`, except algebra is taken from typeclass.
+evalM :: (Monad m, OpAlg f (CarrierM m a), ScopeAlg g (CarrierM m a))
+      => Pro (CarrierM m a) -> Prog f g a -> m a
+evalM pro = runM alg' where
     alg' = A alg dem pro
 
 instance (OpAlg f a, OpAlg g a) => OpAlg (f :+: g) a where
