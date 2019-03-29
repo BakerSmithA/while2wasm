@@ -29,7 +29,7 @@ instance OpAlg BExp DocCarrier where
     alg (Equ (Id x) (Id y)) = Id $ parens (do x; text " = ";  y)
     alg (LEq (Id x) (Id y)) = Id $ parens (do x; text " <= "; y)
     alg (And (Id x) (Id y)) = Id $ parens (do x; text " && "; y)
-    alg (Not (Id x))        = Id $ parens (do text "!"; parens x)
+    alg (Not (Id x))        = Id $ do text "!"; parens x
 
 instance OpAlg IVarStm DocCarrier where
     alg (SetVar v (Id x) (Id k)) = Id (do text v; text " := "; x; nl; k)
@@ -91,7 +91,7 @@ test = do
     block
         [("x", num 1), ("y", getIVar "z")]
         [("f", call "f")]
-        (while false (
+        (while (notB false) (
             ifElse (true)
                 (call "f")
                 (call "g")))
