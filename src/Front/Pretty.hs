@@ -16,7 +16,7 @@ type DocCarrier = CarrierM Doc ()
 
 instance OpAlg IVarExp DocCarrier where
     alg :: IVarExp (DocCarrier n) -> DocCarrier n
-    alg (GetVar v) = M _
+    alg (GetVar v) = undefined
 
 instance OpAlg AExp DocCarrier where
     alg = undefined
@@ -25,7 +25,7 @@ instance OpAlg BExp DocCarrier where
     alg = undefined
 
 instance OpAlg IVarStm DocCarrier where
-    alg = undefined
+    alg (SetVar v (M x) (M k)) = M (do text v; text " := "; x; nl; k)
 
 instance OpAlg IProcStm DocCarrier where
     alg = undefined

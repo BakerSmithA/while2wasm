@@ -13,9 +13,11 @@ module Helper.Prog
 , Progable(..)
 , CarrierM(..)
 , CarrierM'(..)
+, CarrierId(..)
 , fold
 , run
 , runM
+, runId
 ) where
 
 data Prog f g a
@@ -82,6 +84,10 @@ run gen alg prog = fold alg (fmap gen prog)
 class Progable p f g where
     prog :: p -> Prog f g ()
 
+--------------------------------------------------------------------------------
+-- Convenience
+--------------------------------------------------------------------------------
+
 -- Covenience carrier for converting Prog trees to be wrapped in monad context.
 -- `n` nested monads representing result at each level of scope.
 data CarrierM m a n = M (m (CarrierM' m a n))
@@ -98,3 +104,16 @@ runM alg prog = case run genM alg prog of
     (M prog') -> do
         (CZM x) <- prog'
         return x
+
+
+-- Carrier with no nesting.
+-- TODO: What exactly does this mean?
+-- Use if do not care about nesting?
+data CarrierId a (n :: Nat) = Id a
+
+genId :: a -> CarrierId a 'Z
+genId = Id
+
+runId :: (Functor f, Functor g) => Alg f g (CarrierId a) -> Prog f g a -> a
+runId alg prog = case run genId alg prog of
+    (Id x) -> x

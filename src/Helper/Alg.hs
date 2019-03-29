@@ -36,11 +36,15 @@ eval gen pro = run gen alg' where
     alg' = A alg dem pro
 
 -- Like `runM`, except algebra is taken from typeclass.
-evalM :: (Monad m, OpAlg f (CarrierM m a), ScopeAlg g (CarrierM m a))
-      => Prog f g a -> m a
+evalM :: (Monad m, OpAlg f (CarrierM m a), ScopeAlg g (CarrierM m a)) => Prog f g a -> m a
 evalM = runM alg' where
     alg' = A alg dem pro
     pro (M x) = M (return (CSM x))
+
+evalId :: (OpAlg f (CarrierId a), ScopeAlg g (CarrierId a)) => Prog f g a -> a
+evalId = runId alg' where
+    alg' = A alg dem pro
+    pro (Id x) = Id x
 
 instance (OpAlg f a, OpAlg g a) => OpAlg (f :+: g) a where
     alg (L x) = alg x
