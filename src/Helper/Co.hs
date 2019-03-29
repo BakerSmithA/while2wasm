@@ -4,7 +4,13 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 
-module Helper.Co where
+module Helper.Co
+( module Helper.Prog
+, (:+:)(..)
+, (:<:)(..)
+, inject
+, injectS
+) where
 
 import Helper.Prog
 

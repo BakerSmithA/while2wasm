@@ -4,7 +4,13 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, TypeOperators #-}
 {-# LANGUAGE DataKinds, KindSignatures, RankNTypes #-}
 
-module Helper.Alg where
+module Helper.Alg
+( module Helper.Prog
+, OpAlg(..)
+, ScopeAlg(..)
+, Pro
+, eval
+) where
 
 import Helper.Prog
 import Helper.Co
