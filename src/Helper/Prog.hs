@@ -57,13 +57,13 @@ data Alg f g a = A {
     -- Demotion: algebra for exiting scope, this is denoted by decrease in
     -- `n`. Here, g is required to tell you about where you are exiting from,
     -- e.g. If constructor for an if-statement.
-  , d :: forall n. g (a (S n)) -> a n
+  , d :: forall n. g (a ('S n)) -> a n
     -- Promotion: algebra for entering scope.
-  , p :: forall n. a n -> a (S n)
+  , p :: forall n. a n -> a ('S n)
 }
 
 fold :: (Functor f, Functor g) => Alg f g a -> Prog f g (a n) -> a n
-fold alg (Var x)    = x
+fold _   (Var x)    = x
 fold alg (Op op)    = a alg (fmap (fold alg) op)
 fold alg (Scope sc) = d alg (fmap (fold alg . fmap (p alg . fold alg)) sc)
 
@@ -71,7 +71,7 @@ fold alg (Scope sc) = d alg (fmap (fold alg . fmap (p alg . fold alg)) sc)
 -- unindexed return type `r` into the indexed carrier type `a Z` before
 -- folding over the structure.
 
-run :: (Functor f, Functor g) => (r -> a Z) -> Alg f g a -> Prog f g r -> a Z
+run :: (Functor f, Functor g) => (r -> a 'Z) -> Alg f g a -> Prog f g r -> a 'Z
 run gen alg prog = fold alg (fmap gen prog)
 
 --------------------------------------------------------------------------------

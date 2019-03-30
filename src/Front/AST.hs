@@ -113,8 +113,8 @@ notB x = inject (Not x)
 
 -- IVarStm
 
-setVar :: IVarStm :<: f => Ident -> Prog f g () -> Prog f g ()
-setVar v x = inject (SetVar v x (Var ()))
+setIVar :: IVarStm :<: f => Ident -> Prog f g () -> Prog f g ()
+setIVar v x = inject (SetVar v x (Var ()))
 
 -- IProcStm
 

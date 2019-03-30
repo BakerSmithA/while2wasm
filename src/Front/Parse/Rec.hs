@@ -3,7 +3,14 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, FlexibleContexts #-}
 
-module Front.Parse.Rec where
+module Front.Parse.Rec
+( Ident
+, AExp(..)
+, BExp(..)
+, VarDecls
+, ProcDecls
+, Stm(..)
+) where
 
 import qualified Front.AST as A
 import Helper.Prog
@@ -68,7 +75,7 @@ instance ( A.IVarExp :<: f, A.AExp :<: f, A.BExp :<: f
          , A.ScopeStm :<: g, A.IBlockStm :<: g )
          => Progable Stm f g where
     prog (Skip)          = A.skip
-    prog (Assign v x)    = A.setVar v (prog x)
+    prog (Assign v x)    = A.setIVar v (prog x)
     prog (Comp s1 s2)    = do prog s1; prog s2
     prog (If b t e)      = A.ifElse (prog b) (prog t) (prog e)
     prog (While b s)     = A.while (prog b) (prog s)

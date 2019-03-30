@@ -3,7 +3,6 @@
 
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 {-# LANGUAGE TypeOperators, DataKinds #-}
-{-# LANGUAGE InstanceSigs #-}
 
 module Front.Pretty where
 
