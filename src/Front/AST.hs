@@ -13,7 +13,7 @@ type Ident = String
 -- Expressions over variables (i.e. produces a value), where variable names are
 -- represented as strings.
 data IVarExp k
-    = GetVar Ident
+    = IGetVar Ident
     deriving Functor
 
 data AExp k
@@ -43,13 +43,13 @@ mapPs f = map (\(v, s) -> (v, f s))
 
 -- Statements involving variables, where variable names are represented as strings.
 data IVarStm k
-    = SetVar Ident k k
+    = ISetVar Ident k k
     deriving Functor
 
 -- Statements regarding procedures, where procedure names are represented
 -- as strings.
 data IProcStm k
-    = Call Ident k
+    = ICall Ident k
     deriving Functor
 
 -- Instructions with continuations.
@@ -67,7 +67,7 @@ data ScopeStm k
 -- Block with local variable and procedure declarations, where the names of
 -- variables and procedures are represented as strings.
 data IBlockStm k
-    = Block (VarDecls Ident k) (ProcDecls Ident k) k
+    = IBlock (VarDecls Ident k) (ProcDecls Ident k) k
     deriving Functor
 
 -- Smart Constructors
@@ -75,7 +75,7 @@ data IBlockStm k
 -- IVarExp
 
 getIVar :: IVarExp :<: f => Ident -> Prog f g a
-getIVar v = inject (GetVar v)
+getIVar v = inject (IGetVar v)
 
 -- AExp
 
@@ -114,12 +114,12 @@ notB x = inject (Not x)
 -- IVarStm
 
 setIVar :: IVarStm :<: f => Ident -> Prog f g () -> Prog f g ()
-setIVar v x = inject (SetVar v x (Var ()))
+setIVar v x = inject (ISetVar v x (Var ()))
 
 -- IProcStm
 
 call :: IProcStm :<: f => Ident -> Prog f g ()
-call func = inject (Call func (Var ()))
+call func = inject (ICall func (Var ()))
 
 -- Stm
 
@@ -137,7 +137,7 @@ ifElse b t e = injectS (fmap (fmap return) (If b t e))
 while :: (Functor f, ScopeStm :<: g) => Prog f g () -> Prog f g () -> Prog f g ()
 while b s = injectS (fmap (fmap return) (While b s))
 
--- IBlockStm
+-- IIBlockStm
 
 block :: (Functor f, IBlockStm :<: g) => [(Ident, Prog f g ())] -> [(Ident, Prog f g ())] -> Prog f g () -> Prog f g ()
-block vs ps b = injectS (fmap (fmap return) (Block vs ps b))
+block vs ps b = injectS (fmap (fmap return) (IBlock vs ps b))

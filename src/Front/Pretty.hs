@@ -14,7 +14,7 @@ import Helper.Co
 type DocCarrier = CarrierId (Doc ())
 
 instance OpAlg IVarExp DocCarrier where
-    alg (GetVar v) = Id (text v)
+    alg (IGetVar v) = Id (text v)
 
 instance OpAlg AExp DocCarrier where
     alg (Num n)             = Id $ showable n
