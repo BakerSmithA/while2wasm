@@ -12,8 +12,8 @@ type Ident = String
 
 -- Expressions over variables (i.e. produces a value), where variable names are
 -- represented as strings.
-data IVarExp k
-    = IGetVar Ident
+data VarExp v k
+    = GetVar v
     deriving Functor
 
 data AExp k
@@ -42,14 +42,14 @@ mapPs :: (k -> b) -> ProcDecls v k -> ProcDecls v b
 mapPs f = map (\(v, s) -> (v, f s))
 
 -- Statements involving variables, where variable names are represented as strings.
-data IVarStm k
-    = ISetVar Ident k k
+data VarStm v k
+    = SetVar v k k
     deriving Functor
 
 -- Statements regarding procedures, where procedure names are represented
 -- as strings.
-data IProcStm k
-    = ICall Ident k
+data ProcStm p k
+    = Call p k
     deriving Functor
 
 -- Instructions with continuations.
@@ -66,16 +66,16 @@ data ScopeStm k
 
 -- Block with local variable and procedure declarations, where the names of
 -- variables and procedures are represented as strings.
-data IBlockStm k
-    = IBlock (VarDecls Ident k) (ProcDecls Ident k) k
+data BlockStm v p k
+    = Block (VarDecls v k) (ProcDecls p k) k
     deriving Functor
 
 -- Smart Constructors
 
 -- IVarExp
 
-getIVar :: IVarExp :<: f => Ident -> Prog f g a
-getIVar v = inject (IGetVar v)
+getIVar :: VarExp Ident :<: f => Ident -> Prog f g a
+getIVar v = inject (GetVar v)
 
 -- AExp
 
@@ -113,13 +113,13 @@ notB x = inject (Not x)
 
 -- IVarStm
 
-setIVar :: IVarStm :<: f => Ident -> Prog f g () -> Prog f g ()
-setIVar v x = inject (ISetVar v x (Var ()))
+setIVar :: VarStm Ident :<: f => Ident -> Prog f g () -> Prog f g ()
+setIVar v x = inject (SetVar v x (Var ()))
 
 -- IProcStm
 
-call :: IProcStm :<: f => Ident -> Prog f g ()
-call func = inject (ICall func (Var ()))
+call :: ProcStm Ident :<: f => Ident -> Prog f g ()
+call func = inject (Call func (Var ()))
 
 -- Stm
 
@@ -139,5 +139,5 @@ while b s = injectS (fmap (fmap return) (While b s))
 
 -- IIBlockStm
 
-block :: (Functor f, IBlockStm :<: g) => [(Ident, Prog f g ())] -> [(Ident, Prog f g ())] -> Prog f g () -> Prog f g ()
-block vs ps b = injectS (fmap (fmap return) (IBlock vs ps b))
+block :: (Functor f, BlockStm Ident Ident :<: g) => [(Ident, Prog f g ())] -> [(Ident, Prog f g ())] -> Prog f g () -> Prog f g ()
+block vs ps b = injectS (fmap (fmap return) (Block vs ps b))

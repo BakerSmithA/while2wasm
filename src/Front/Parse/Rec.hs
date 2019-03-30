@@ -2,6 +2,7 @@
 
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, FlexibleContexts #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Front.Parse.Rec
 ( Ident
@@ -53,7 +54,7 @@ data Stm
     | Block VarDecls ProcDecls Stm
     deriving (Eq, Show)
 
-instance (A.IVarExp :<: f, A.AExp :<: f)
+instance (A.VarExp Ident :<: f, A.AExp :<: f)
         => Progable AExp f g where
     prog (Num n)   = A.num n
     prog (Ident v) = A.getIVar v
@@ -61,7 +62,7 @@ instance (A.IVarExp :<: f, A.AExp :<: f)
     prog (Sub x y) = A.sub (prog x) (prog y)
     prog (Mul x y) = A.mul (prog x) (prog y)
 
-instance (A.IVarExp :<: f, A.AExp :<: f, A.BExp :<: f)
+instance (A.VarExp Ident :<: f, A.AExp :<: f, A.BExp :<: f)
         => Progable BExp f g where
     prog (T)       = A.true
     prog (F)       = A.false
@@ -70,9 +71,9 @@ instance (A.IVarExp :<: f, A.AExp :<: f, A.BExp :<: f)
     prog (And x y) = A.andB (prog x) (prog y)
     prog (Not x)   = A.notB (prog x)
 
-instance ( A.IVarExp :<: f, A.AExp :<: f, A.BExp :<: f
-         , A.IVarStm :<: f, A.IProcStm :<: f, A.Stm :<: f
-         , A.ScopeStm :<: g, A.IBlockStm :<: g )
+instance ( A.VarExp Ident :<: f, A.AExp :<: f, A.BExp :<: f
+         , A.VarStm Ident :<: f, A.ProcStm Ident :<: f, A.Stm :<: f
+         , A.ScopeStm :<: g, A.BlockStm Ident Ident :<: g )
          => Progable Stm f g where
     prog (Skip)          = A.skip
     prog (Assign v x)    = A.setIVar v (prog x)
