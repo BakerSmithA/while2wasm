@@ -74,8 +74,8 @@ data BlockStm v p k
 
 -- IVarExp
 
-getIVar :: VarExp Ident :<: f => Ident -> Prog f g a
-getIVar v = inject (GetVar v)
+getVar :: VarExp v :<: f => v -> Prog f g a
+getVar v = inject (GetVar v)
 
 -- AExp
 
@@ -113,12 +113,12 @@ notB x = inject (Not x)
 
 -- IVarStm
 
-setIVar :: VarStm Ident :<: f => Ident -> Prog f g () -> Prog f g ()
-setIVar v x = inject (SetVar v x (Var ()))
+setVar :: VarStm v :<: f => v -> Prog f g () -> Prog f g ()
+setVar v x = inject (SetVar v x (Var ()))
 
 -- IProcStm
 
-call :: ProcStm Ident :<: f => Ident -> Prog f g ()
+call :: ProcStm p :<: f => p -> Prog f g ()
 call func = inject (Call func (Var ()))
 
 -- Stm
@@ -139,5 +139,5 @@ while b s = injectS (fmap (fmap return) (While b s))
 
 -- IIBlockStm
 
-block :: (Functor f, BlockStm Ident Ident :<: g) => [(Ident, Prog f g ())] -> [(Ident, Prog f g ())] -> Prog f g () -> Prog f g ()
+block :: (Functor f, BlockStm v p :<: g) => [(v, Prog f g ())] -> [(p, Prog f g ())] -> Prog f g () -> Prog f g ()
 block vs ps b = injectS (fmap (fmap return) (Block vs ps b))

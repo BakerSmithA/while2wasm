@@ -57,7 +57,7 @@ data Stm
 instance (A.VarExp Ident :<: f, A.AExp :<: f)
         => Progable AExp f g where
     prog (Num n)   = A.num n
-    prog (Ident v) = A.getIVar v
+    prog (Ident v) = A.getVar v
     prog (Add x y) = A.add (prog x) (prog y)
     prog (Sub x y) = A.sub (prog x) (prog y)
     prog (Mul x y) = A.mul (prog x) (prog y)
@@ -76,7 +76,7 @@ instance ( A.VarExp Ident :<: f, A.AExp :<: f, A.BExp :<: f
          , A.ScopeStm :<: g, A.BlockStm Ident Ident :<: g )
          => Progable Stm f g where
     prog (Skip)          = A.skip
-    prog (Assign v x)    = A.setIVar v (prog x)
+    prog (Assign v x)    = A.setVar v (prog x)
     prog (Comp s1 s2)    = do prog s1; prog s2
     prog (If b t e)      = A.ifElse (prog b) (prog t) (prog e)
     prog (While b s)     = A.while (prog b) (prog s)
