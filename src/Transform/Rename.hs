@@ -13,8 +13,7 @@ import Helper.Alg
 import Helper.Eff.Void
 
 -- Use Datatypes a la Carte to convert AST to handler.
-make :: (OpAlg f (Carrier f g), ScopeAlg g (Carrier f g))
-     => Prog f g () -> RenameHandler f g
+make :: (OpAlg f (Carrier f g), ScopeAlg g (Carrier f g)) => Prog f g () -> RenameHandler f g
 make = evalId gen where
     gen x = Id (return (return x))
 
@@ -22,6 +21,5 @@ make = evalId gen where
 handle :: RenameHandler f g -> Prog f g ()
 handle = handleVoid . handleRename
 
-rename :: (OpAlg f (Carrier f g), ScopeAlg g (Carrier f g))
-       => Prog f g () -> Prog f g ()
+rename :: (OpAlg f (Carrier f g), ScopeAlg g (Carrier f g)) => Prog f g () -> Prog f g ()
 rename = handle . make
