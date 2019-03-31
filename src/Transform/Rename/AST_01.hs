@@ -14,7 +14,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, FlexibleContexts #-}
 
-module Transform.Rename.AST where
+module Transform.Rename.AST_01 where
 
 import Front.AST
 import Transform.Rename.RenameEff
@@ -22,26 +22,27 @@ import Helper.Alg
 import Helper.Co
 import Helper.Eff.Void
 
-type Handler f g = CarrierId (Prog (Rename :+: Void) (Local :+: Void) (Prog f g ()))
+type RenameHandler f g = Prog (Rename :+: Void) (Local :+: Void) (Prog f g ())
+type Carrier       f g = CarrierId (RenameHandler f g)
 
 -- Convenience method for making it easier to convert binary operators.
-binOp :: (Prog f g () -> Prog f g () -> Prog f g ()) -> Handler f g n -> Handler f g n -> Handler f g n
+binOp :: (Prog f g () -> Prog f g () -> Prog f g ()) -> Carrier f g n -> Carrier f g n -> Carrier f g n
 binOp f (Id x) (Id y) = Id $ do
     x' <- x; y' <- y
     return (f x' y')
 
-instance VarExp Fresh :<: f => OpAlg (VarExp Ident) (Handler f g) where
+instance VarExp Fresh :<: f => OpAlg (VarExp Ident) (Carrier f g) where
     alg (GetVar v) = Id $ do
         v' <- varName v
         return (getVar v')
 
-instance AExp :<: f => OpAlg AExp (Handler f g) where
+instance AExp :<: f => OpAlg AExp (Carrier f g) where
     alg (Num n)   = Id $ return (num n)
     alg (Add x y) = binOp add x y
     alg (Sub x y) = binOp sub x y
     alg (Mul x y) = binOp mul x y
 
-instance BExp :<: f => OpAlg BExp (Handler f g) where
+instance BExp :<: f => OpAlg BExp (Carrier f g) where
     alg (T)          = Id $ return true
     alg (F)          = Id $ return false
     alg (Equ x y)    = binOp equ x y
@@ -49,20 +50,20 @@ instance BExp :<: f => OpAlg BExp (Handler f g) where
     alg (And x y)    = binOp andB x y
     alg (Not (Id x)) = Id $ do x' <- x; return (notB x')
 
-instance (VarStm Fresh :<: f, Functor g) => OpAlg (VarStm Ident) (Handler f g) where
+instance (VarStm Fresh :<: f, Functor g) => OpAlg (VarStm Ident) (Carrier f g) where
     alg (SetVar v (Id x) (Id k)) = Id $ do
         v' <- varName v
         x' <- x
         k' <- k
         return (do setVar v' x'; k')
 
-instance (ProcStm Fresh :<: f, Functor g) => OpAlg (ProcStm Ident) (Handler f g) where
+instance (ProcStm Fresh :<: f, Functor g) => OpAlg (ProcStm Ident) (Carrier f g) where
     alg (Call p (Id k)) = Id $ do
         p' <- procName p
         k' <- k
         return (do call p'; k')
 
-instance (Stm :<: f, Functor g) => OpAlg Stm (Handler f g) where
+instance (Stm :<: f, Functor g) => OpAlg Stm (Carrier f g) where
     alg (Skip (Id k)) = Id $ do
         k' <- k
         return (do skip; k')
@@ -72,7 +73,7 @@ instance (Stm :<: f, Functor g) => OpAlg Stm (Handler f g) where
         k' <- k
         return (do export x'; k')
 
-instance (Functor f, ScopeStm :<: g) => ScopeAlg ScopeStm (Handler f g) where
+instance (Functor f, ScopeStm :<: g) => ScopeAlg ScopeStm (Carrier f g) where
     dem (If (Id b) (Id t) (Id e)) = Id $ do
         b' <- b
         t' <- t
@@ -84,7 +85,7 @@ instance (Functor f, ScopeStm :<: g) => ScopeAlg ScopeStm (Handler f g) where
         s' <- s
         return (while b' s')
 
-instance (Functor f, BlockStm Fresh Fresh :<: g) => ScopeAlg (BlockStm Ident Ident) (Handler f g) where
+instance (Functor f, BlockStm Fresh Fresh :<: g) => ScopeAlg (BlockStm Ident Ident) (Carrier f g) where
     dem (Block vs ps (Id s)) = Id $ do
         vs' <- map2M varName unId vs
         ps' <- map2M procName unId ps
