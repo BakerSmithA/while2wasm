@@ -83,5 +83,5 @@ instance ( A.VarExp Ident :<: f, A.AExp :<: f, A.BExp :<: f
     prog (Export x)      = A.export (prog x)
     prog (Call fname)    = A.call fname
     prog (Block vs ps s) = A.block vs' ps' (prog s) where
-        vs' = A.mapVs prog vs
-        ps' = A.mapPs prog ps
+        vs' = A.mapSnd prog vs
+        ps' = A.mapSnd prog ps

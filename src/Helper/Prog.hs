@@ -109,7 +109,7 @@ runM alg prog = case run genM alg prog of
 -- Carrier with no nesting.
 -- TODO: What exactly does this mean?
 -- Use if do not care about nesting?
-data CarrierId a (n :: Nat) = Id a
+data CarrierId a (n :: Nat) = Id { unId :: a }
 
 runId :: (Functor f, Functor g) => (r -> CarrierId a 'Z) -> Alg f g (CarrierId a) -> Prog f g r -> a
 runId gen alg prog = case run gen alg prog of

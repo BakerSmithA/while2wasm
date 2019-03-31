@@ -35,11 +35,14 @@ data BExp k
 type VarDecls  v k = [(v, k)]
 type ProcDecls v k = [(v, k)]
 
-mapVs :: (k -> b) -> VarDecls v k -> VarDecls v b
-mapVs f = map (\(v, x) -> (v, f x))
+mapSnd :: (b -> c) -> [(a, b)] -> [(a, c)]
+mapSnd f = map (\(x, y) -> (x, f y))
 
-mapPs :: (k -> b) -> ProcDecls v k -> ProcDecls v b
-mapPs f = map (\(v, s) -> (v, f s))
+map2M :: Monad m => (a -> m c) -> (b -> m d) -> [(a, b)] -> m [(c, d)]
+map2M f g = mapM $ \(x, y) -> do
+    x' <- f x
+    y' <- g y
+    return (x', y')
 
 -- Statements involving variables, where variable names are represented as strings.
 data VarStm v k
