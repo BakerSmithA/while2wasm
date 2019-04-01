@@ -11,15 +11,17 @@ module Helper.Eff.Exception where
 import Helper.Prog
 import Helper.Co
 import Helper.Eff
+import Helper.Eff.Void
 
 --------------------------------------------------------------------------------
 -- Syntax
 --------------------------------------------------------------------------------
 
 -- TODO
--- Throw an error of type e.
+-- Throw an error of type e, and do not perform anything after as execution
+-- will either stop (if there is no catch), or jump to the catch handler.
 data Throw k
-    = Throw' String k
+    = Throw' String
     deriving Functor
 
 -- Catch a thrown error of type e.
@@ -27,9 +29,9 @@ data Catch k
     = Catch' (String -> k)
     deriving Functor
 
-pattern Throw err k <- (prj -> Just (Throw' err k))
-throw :: Throw :<: f => String -> Prog f g ()
-throw err = inject (Throw' err (Var ()))
+pattern Throw err <- (prj -> Just (Throw' err))
+throw :: Throw :<: f => String -> Prog f g a
+throw err = inject (Throw' err)
 
 pattern Catch hdl <- (prj -> Just (Catch' hdl))
 catch :: (Functor f, Catch :<: g) => (String -> Prog f g ()) -> Prog f g ()
@@ -53,13 +55,17 @@ data CarrierExc f g a (n :: Nat)
 
 data CarrierExc' f g a :: Nat -> * where
     CZ :: a -> CarrierExc' f g a 'Z
-    CS :: [CarrierExc' f g a n] -> CarrierExc' f g a ('S n)
+    CS :: (Prog f g (Either String a)) -> CarrierExc' f g a ('S n)
+
+genExc :: (Functor f, Functor g) => a -> CarrierExc f g a 'Z
+genExc x = Exc (return (Right x))
 
 algExc :: (Functor f, Functor g) => Alg (Throw :+: f) (Catch :+: g) (CarrierExc f g a)
 algExc = A a d p where
     a :: (Functor f, Functor g) => (Throw :+: f) (CarrierExc f g a n) -> CarrierExc f g a n
-    a (Throw err k) = undefined
-    a (Other op)    = undefined
+    -- Don't perform continuation if an error is thrown.
+    a (Throw err) = Exc (return (Left err))
+    a (Other op)  = undefined
 
     d :: (Functor f, Functor g) => (Catch :+: g) (CarrierExc f g a ('S n)) -> CarrierExc f g a n
     d (Catch hdl) = undefined
@@ -70,5 +76,16 @@ algExc = A a d p where
 
 -- Converts any program which might thrown an exception into a program that
 -- returns either its result, or an error.
-handleExc :: (Functor f, Functor g) => Prog (Throw :+: f) (Catch :+: g) a -> Prog f g (Either e a)
-handleExc prog = undefined
+handleExc :: (Functor f, Functor g) => Prog (Throw :+: f) (Catch :+: g) a -> Prog f g (Either String a)
+handleExc prog = case run genExc algExc prog of
+    (Exc x) -> x
+
+test :: Prog (Throw :+: Void) (Catch :+: Void) Int
+test = do
+    throw "Hello"
+    return 1
+
+runTest :: IO ()
+runTest = do
+    let r = (handleVoid . handleExc) test
+    putStrLn (show r)
