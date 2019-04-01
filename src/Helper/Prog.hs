@@ -20,6 +20,8 @@ module Helper.Prog
 , runId
 ) where
 
+import Data.Functor.Classes (Eq1, eq1, liftEq)
+
 data Prog f g a
     -- Leaf node
     = Var a
@@ -114,3 +116,16 @@ data CarrierId a (n :: Nat) = Id { unId :: a }
 runId :: (Functor f, Functor g) => (r -> CarrierId a 'Z) -> Alg f g (CarrierId a) -> Prog f g r -> a
 runId gen alg prog = case run gen alg prog of
     (Id x) -> x
+
+--------------------------------------------------------------------------------
+-- Equivalence
+--------------------------------------------------------------------------------
+
+instance (Eq1 f, Eq1 g) => Eq1 (Prog f g) where
+    liftEq eq (Var   x) (Var   y) = x `eq` y
+    liftEq eq (Op    x) (Op    y) = liftEq (liftEq eq) x y
+    liftEq eq (Scope x) (Scope y) = liftEq (liftEq (liftEq eq)) x y
+    liftEq _  _         _         = False
+
+instance (Eq a, Eq1 f, Eq1 g) => Eq (Prog f g a) where
+    (==) = eq1
