@@ -23,8 +23,11 @@ import Transform.Rename.RenameEff
 import Helper.Alg
 import Helper.Co
 import Helper.Eff.Void
+import Helper.Eff.Exception
 
-type RenameHandler f g = Prog (Rename :+: Void) (Local :+: Void) (Prog f g ())
+-- Combine renaming and exception to allow for throwing errors if
+-- a procedure is used before being declared.
+type RenameHandler f g = Prog (Throw :+: Rename :+: Void) (Catch :+: Local :+: Void) (Prog f g ())
 type Carrier       f g = CarrierId (RenameHandler f g)
 
 -- Convenience method for making it easier to convert binary operators.
@@ -61,9 +64,15 @@ instance (VarStm Fresh :<: f, Functor g) => OpAlg (VarStm Ident) (Carrier f g) w
 
 instance (ProcStm Fresh :<: f, Functor g) => OpAlg (ProcStm Ident) (Carrier f g) where
     alg (Call p (Id k)) = Id $ do
-        p' <- procName p
-        k' <- k
-        return (do call p'; k')
+        -- If a procedure has not been declared before calling, then throw an error.
+        exists <- procExists p
+        if exists
+            then do
+                p' <- procName p
+                k' <- k
+                return (do call p'; k')
+            else
+                throw "No procedure declared"
 
 instance (Stm :<: f, Functor g) => OpAlg Stm (Carrier f g) where
     alg (Skip (Id k)) = Id $ do

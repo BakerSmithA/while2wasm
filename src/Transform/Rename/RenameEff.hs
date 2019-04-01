@@ -13,6 +13,7 @@ module Transform.Rename.RenameEff
 , Local
 , varName
 , procName
+, procExists
 , local
 , handleRename
 ) where
@@ -45,6 +46,8 @@ data Rename k
     = VarName' Ident (Fresh -> k)
     -- Returns fresh name corresponding to renamed procedure.
     | ProcName' Ident (Fresh -> k)
+    -- Returns whether a procedure has been declared.
+    | ProcExists' Ident (Bool -> k)
     deriving Functor
 
 data Local k
@@ -61,9 +64,13 @@ pattern VarName v fk <- (prj -> Just (VarName' v fk))
 varName :: (Functor f, Functor g) => Rename :<: f => Ident -> Prog f g Fresh
 varName v = inject (VarName' v Var)
 
-pattern ProcName v fk <- (prj -> Just (ProcName' v fk))
+pattern ProcName p fk <- (prj -> Just (ProcName' p fk))
 procName :: (Functor f, Functor g) => Rename :<: f => Ident -> Prog f g Fresh
-procName v = inject (ProcName' v Var)
+procName p = inject (ProcName' p Var)
+
+pattern ProcExists p fk <- (prj -> Just (ProcExists' p fk))
+procExists :: (Functor f, Functor g) => Rename :<: f => Ident -> Prog f g Bool
+procExists p = inject (ProcExists' p Var)
 
 pattern Local vs ps k <- (prj -> Just (Local' vs ps k))
 local :: (Functor f, Functor g) => Local :<: g => VarNames -> ProcNames -> Prog f g a -> Prog f g a
@@ -83,6 +90,10 @@ data Names = Names {
 
 emptyNames :: (Word -> Fresh) -> Names
 emptyNames = Names Map.empty 0
+
+-- Returns whether there exists a mapping from the indentifier to a fresh name.
+nameExists :: Ident -> Names -> Bool
+nameExists v names = v `Map.member` (seen names)
 
 -- Creates a fresh name and assigns a mapping from ident to the fresh name in
 -- the current scope.
@@ -166,9 +177,10 @@ algGet getFreshId fk = RN $ \env ->
 algRN :: (Functor f, Functor g) => Alg (Rename :+: f) (Local :+: g) (CarrierRN f g a)
 algRN = A a d p where
     a :: (Functor f, Functor g) => (Rename :+: f) (CarrierRN f g a n) -> CarrierRN f g a n
-    a (VarName  ident fk) = algGet (getFreshVar  ident) fk
-    a (ProcName ident fk) = algGet (getFreshProc ident) fk
-    a (Other op)          = RN $ \env -> Op (fmap (\(RN runRN) -> runRN env) op) where
+    a (VarName  ident fk)   = algGet (getFreshVar  ident) fk
+    a (ProcName ident fk)   = algGet (getFreshProc ident) fk
+    a (ProcExists ident fk) = RN $ \env -> runRN (fk (nameExists ident (procNames env))) env
+    a (Other op)            = RN $ \env -> Op (fmap (\(RN runRN) -> runRN env) op) where
 
     d :: (Functor f, Functor g) => (Local :+: g) (CarrierRN f g a ('S n)) -> CarrierRN f g a n
     d (Local vs ps k) = RN $ \env -> do

@@ -92,13 +92,3 @@ handleExc prog = do
     case r of
         Left err     -> return (Left err)
         Right (CZ x) -> return (Right x)
-
-test :: Prog (Throw :+: Void) (Catch :+: Void) Int
-test = do
-    throw "Hello"
-    return 1
-
-runTest :: IO ()
-runTest = do
-    let r = (handleVoid . handleExc) test
-    putStrLn (show r)

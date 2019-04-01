@@ -55,37 +55,42 @@ renameSpec = do
         it "renames getting variables" $ do
             let a = getIVar "x" :: IWhile
                 e = getFVar (v 0) :: FWhile
-            rename a `shouldBe` e
+            rename a `shouldBe` Right e
 
         it "renames variables in arithmetic expressions" $ do
             let a = add (getIVar "x") (getIVar "y") :: IWhile
                 e = add (getFVar (v 0)) (getFVar (v 1)) :: FWhile
-            rename a `shouldBe` e
+            rename a `shouldBe` Right e
 
         it "renames variables in boolean expressions" $ do
             let a = equ (getIVar "x") (getIVar "y") :: IWhile
                 e = equ (getFVar (v 0)) (getFVar (v 1)) :: FWhile
-            rename a `shouldBe` e
+            rename a `shouldBe` Right e
 
         it "renames setting variables" $ do
             let a = setIVar "x"   (num 1) :: IWhile
                 e = setFVar (v 0) (num 1) :: FWhile
-            rename a `shouldBe` e
+            rename a `shouldBe` Right e
 
         it "renames procedures" $ do
+            let a = do blockI [] [("p", skip)] (callI "p")   :: IWhile
+                e = do blockF [] [(p 0, skip)] (callF (p 0)) :: FWhile
+            rename a `shouldBe` Right e
+
+        it "fails if calling procedure which has been been declared yet" $ do
             let a = callI "p" :: IWhile
-                e = callF (p 0) :: FWhile
-            rename a `shouldBe` e
+                r = rename a  :: Either String FWhile
+            r `shouldBe` Left "No procedure declared"
 
         it "uses existing fresh name" $ do
             let a = do export (getIVar "x");   export (getIVar "x") :: IWhile
                 e = do export (getFVar (v 0)); export (getFVar (v 0)) :: FWhile
-            rename a `shouldBe` e
+            rename a `shouldBe` Right e
 
         it "renames variables in exports" $ do
             let a = export (getIVar "x") :: IWhile
                 e = export (getFVar (v 0)) :: FWhile
-            rename a `shouldBe` e
+            rename a `shouldBe` Right e
 
         it "renames variables in if statements" $ do
             let a = ifElse (equ (getIVar "x") (num 1))
@@ -94,14 +99,14 @@ renameSpec = do
                 e = ifElse (equ (getFVar (v 0)) (num 1))
                         (setFVar (v 0) (num 1))
                         (setFVar (v 1) (num 2)) :: FWhile
-            rename a `shouldBe` e
+            rename a `shouldBe` Right e
 
         it "renames variables in while statements" $ do
             let a = while (equ (getIVar "x") (num 1))
                         (setIVar "y" (num 1)) :: IWhile
                 e = while (equ (getFVar (v 0)) (num 1))
                         (setFVar (v 1) (num 1)) :: FWhile
-            rename a `shouldBe` e
+            rename a `shouldBe` Right e
 
         it "renames variables in block body" $ do
             let a = do setIVar "x" (num 1)
@@ -112,7 +117,7 @@ renameSpec = do
                        blockF [] []
                            (setFVar (v 0) (num 1)) :: FWhile
 
-            rename a `shouldBe` e
+            rename a `shouldBe` Right e
 
         it "gives new names to local variables in block" $ do
             let a = do setIVar "x" (num 1)
@@ -123,7 +128,7 @@ renameSpec = do
                        blockF [(v 1, num 1)] []
                            (setFVar (v 1) (num 1)) :: FWhile
 
-            rename a `shouldBe` e
+            rename a `shouldBe` Right e
 
         it "uses local names inside procedures" $ do
             let a = do setIVar "x" (num 1)
@@ -138,4 +143,4 @@ renameSpec = do
                            [(p 0, setFVar (v 1) (num 1))]
                            (setFVar (v 1) (num 1)) :: FWhile
 
-            rename a `shouldBe` e
+            rename a `shouldBe` Right e
