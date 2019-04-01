@@ -8,7 +8,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Transform.Rename.RenameEff
-( Fresh
+( Fresh(..)
 , Rename
 , Local
 , varName
@@ -24,12 +24,17 @@ import Front.AST
 import Helper.Prog
 import Helper.Co
 import Helper.Eff
+import Helper.Pretty
 
 --------------------------------------------------------------------------------
 -- Syntax
 --------------------------------------------------------------------------------
 
-type Fresh = Word
+type Prefix = String
+data Fresh  = Fresh Prefix Word deriving Eq
+
+instance Pretty Fresh where
+    pretty (Fresh pre i) = do text pre; showable i
 
 type VarNames  = [Ident]
 type ProcNames = [Ident]
@@ -71,20 +76,22 @@ local vs ps inner = injectS (fmap (fmap return) (Local' vs ps inner))
 -- Keeps track of mappings from original to fresh names, as well as the next
 -- avaiable fresh name.
 data Names = Names {
-    seen    :: Map Ident Fresh
-  , next    :: Fresh
+    seen     :: Map Ident Fresh
+  , next     :: Word
+  , genFresh :: Word -> Fresh
 }
 
-emptyNames :: Names
+emptyNames :: (Word -> Fresh) -> Names
 emptyNames = Names Map.empty 0
 
 -- Creates a fresh name and assigns a mapping from ident to the fresh name in
 -- the current scope.
 addFresh :: Ident -> Names -> (Fresh, Names)
 addFresh ident names = (fresh, names') where
-    names' = names { next=fresh+1, seen=seen' }
+    names' = names { next=next', seen=seen' }
     seen'  = Map.insert ident fresh (seen names)
-    fresh  = next names
+    fresh  = (genFresh names) next'
+    next'  = next names
 
 -- Returns the mapping from ident to its fresh name, if one exists. Otherwise,
 -- creates a new mapping.
@@ -102,7 +109,7 @@ addManyFresh ids names = foldr f names ids where
 -- Restore names to use old mappings, or new mappings if a mapping was not
 -- present in the old mapping (e.g. a variable was defined at inner scope).
 restoreNames :: Names -> Names -> Names
-restoreNames old new = Names seen' next' where
+restoreNames old new = Names seen' next' (genFresh new) where
     seen' = seen old `Map.union` seen new
     next' = next new -- Don't want to restore next fresh name
 
@@ -113,8 +120,8 @@ data Env = Env {
   , procNames :: Names
 }
 
-emptyEnv :: Env
-emptyEnv = Env emptyNames emptyNames
+emptyEnv :: (Word -> Fresh) -> (Word -> Fresh) -> Env
+emptyEnv nameV nameP = Env (emptyNames nameV) (emptyNames nameP)
 
 getFreshVar :: Ident -> Env -> (Fresh, Env)
 getFreshVar v env = (fresh, env { varNames=varNames' }) where
@@ -179,5 +186,8 @@ algRN = A a d p where
 
 handleRename :: (Functor f, Functor g) => Prog (Rename :+: f) (Local :+: g) a -> Prog f g a
 handleRename prog = do
-    (CZ prog', _) <- runRN (run genRN algRN prog) emptyEnv
+    let nameV i = Fresh "v" i
+        nameP i = Fresh "p" i
+
+    (CZ prog', _) <- runRN (run genRN algRN prog) (emptyEnv nameV nameP)
     return prog'
