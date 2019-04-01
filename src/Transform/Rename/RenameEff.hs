@@ -7,7 +7,15 @@
 {-# LANGUAGE DataKinds, KindSignatures, GADTs #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Transform.Rename.RenameEff where
+module Transform.Rename.RenameEff
+( Fresh
+, Rename
+, Local
+, varName
+, procName
+, local
+, handleRename
+) where
 
 import Data.Word (Word)
 import Data.Map (Map)

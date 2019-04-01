@@ -12,6 +12,7 @@ module Helper.Co
 , injectS
 ) where
 
+import Data.Functor.Classes (Eq1, liftEq)
 import Helper.Prog
 
 infixr 5 :+:
@@ -53,3 +54,8 @@ inject = Op . inj
 -- Inject into the scoped instruction of a Prog tree.
 injectS :: (h :<: g) => h (Prog f g (Prog f g a)) -> Prog f g a
 injectS = Scope . inj
+
+instance (Eq1 f, Eq1 g) => Eq1 (f :+: g) where
+    liftEq (==) (L x) (L y) = liftEq (==) x y
+    liftEq (==) (R x) (R y) = liftEq (==) x y
+    liftEq _ _ _ = False

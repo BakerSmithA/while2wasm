@@ -14,7 +14,10 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, FlexibleContexts #-}
 
-module Transform.Rename.AST_01 where
+module Transform.Rename.AST_01
+( RenameHandler
+, Carrier
+) where
 
 import Front.AST
 import Transform.Rename.RenameEff

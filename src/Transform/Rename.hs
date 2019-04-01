@@ -4,7 +4,10 @@
 
 {-# LANGUAGE FlexibleContexts #-}
 
-module Transform.Rename where
+module Transform.Rename
+( Fresh
+, rename
+) where
 
 import Transform.Rename.AST_01
 import Transform.Rename.RenameEff

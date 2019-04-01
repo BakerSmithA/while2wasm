@@ -4,7 +4,9 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 {-# LANGUAGE TypeOperators, DataKinds #-}
 
-module Front.Pretty where
+module Front.Pretty
+( pretty
+) where
 
 import Front.AST
 import Helper.Pretty
@@ -81,9 +83,12 @@ docProcDecl (f, (Id body)) = do
     parens (do nl; indented body)
     text ";"
 
-docAST :: (Pretty v, Pretty p)
-       => Prog (VarExp v :+: AExp :+: BExp :+: VarStm v :+: ProcStm p :+: Stm)
-               (ScopeStm :+: BlockStm v p) ()
-       -> Doc ()
+type While v p
+    = Prog (VarExp v :+: AExp :+: BExp :+: VarStm v :+: ProcStm p :+: Stm) (ScopeStm :+: BlockStm v p) ()
+
+docAST :: (Pretty v, Pretty p) => While v p -> Doc ()
 docAST = evalId gen where
     gen x = Id (return x)
+
+instance (Pretty v, Pretty p) => Show (While v p) where
+    show = toString 0 . docAST
