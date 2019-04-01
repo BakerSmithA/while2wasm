@@ -4,7 +4,7 @@
 
 {-# LANGUAGE DeriveFunctor, TypeOperators, FlexibleContexts #-}
 {-# LANGUAGE ViewPatterns, PatternSynonyms #-}
-{-# LANGUAGE DataKinds, GADTs, KindSignatures #-}
+{-# LANGUAGE DataKinds, GADTs, KindSignatures, StandaloneDeriving #-}
 
 module Helper.Eff.Exception where
 
@@ -25,9 +25,10 @@ data Throw k
     deriving Functor
 
 -- Catch a thrown error of type e.
-data Catch k
-    = Catch' (String -> k) k
-    deriving Functor
+data Catch k where
+    Catch' :: (String -> Prog f g a) -> k -> Catch k
+
+deriving instance Functor Catch
 
 pattern Throw err <- (prj -> Just (Throw' err))
 throw :: Throw :<: f => String -> Prog f g a
@@ -50,14 +51,15 @@ catch hdl inner = injectS (fmap (fmap return) (Catch' hdl inner))
 
 type ErrHdl a = Maybe (String -> a)
 data CarrierExc f g a (n :: Nat)
-    = Exc { runExc :: ErrHdl (CarrierExc f g a n) -> Prog f g (Either String (CarrierExc' f g a n)) }
+    = Exc { runExc :: ErrHdl (Prog f g a) -> Prog f g (Either String (CarrierExc' f g a n)) }
 
 data CarrierExc' f g a :: Nat -> * where
     CZ :: a -> CarrierExc' f g a 'Z
-    CS :: (ErrHdl (CarrierExc f g a n) -> Prog f g (Either String (CarrierExc' f g a n))) -> CarrierExc' f g a ('S n)
+    CS :: (ErrHdl (Prog f g a) -> Prog f g (Either String (CarrierExc' f g a n))) -> CarrierExc' f g a ('S n)
 
 genExc :: (Functor f, Functor g) => a -> CarrierExc f g a 'Z
-genExc x = Exc $ \_ -> (return (Right (CZ x)))
+genExc = undefined
+-- genExc x = Exc $ \_ -> (return (Right (CZ x)))
 
 algExc :: (Functor f, Functor g) => Alg (Throw :+: f) (Catch :+: g) (CarrierExc f g a)
 algExc = A a d p where
@@ -85,11 +87,12 @@ algExc = A a d p where
 -- Converts any program which might thrown an exception into a program that
 -- returns either its result, or an error.
 handleExc :: (Functor f, Functor g) => Prog (Throw :+: f) (Catch :+: g) a -> Prog f g (Either String a)
-handleExc prog = do
-    r <- runExc (run genExc algExc prog) Nothing
-    case r of
-        Left err     -> return (Left err)
-        Right (CZ x) -> return (Right x)
+handleExc = undefined
+-- handleExc prog = do
+--     r <- runExc (run genExc algExc prog) Nothing
+--     case r of
+--         Left err     -> return (Left err)
+--         Right (CZ x) -> return (Right x)
 
 test1 :: Prog (Throw :+: Void) (Catch :+: Void) Int
 test1 = do
@@ -98,7 +101,7 @@ test1 = do
 
 test2 :: Prog (Throw :+: Void) (Catch :+: Void) Int
 test2 = do
-    catch (\_ -> return 2) (return 1)
+    catch undefined undefined
 
 runTest :: IO ()
 runTest = do
