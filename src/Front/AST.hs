@@ -34,6 +34,9 @@ data BExp k
 type VarDecls  v k = [(v, k)]
 type ProcDecls v k = [(v, k)]
 
+fsts :: [(a, b)] -> [a]
+fsts = fst . unzip
+
 mapSnd :: (b -> c) -> [(a, b)] -> [(a, c)]
 mapSnd f = map (\(x, y) -> (x, f y))
 

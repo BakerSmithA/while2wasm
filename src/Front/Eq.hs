@@ -39,10 +39,14 @@ instance Eq p => Eq1 (ProcStm p) where
 instance Eq1 Stm where
     liftEq eq (Skip k1)     (Skip k2)     = k1 `eq` k2
     liftEq eq (Export x k1) (Export y k2) = x `eq` y && k1 `eq` k2
+    liftEq _  _             _             = False
 
 instance Eq1 ScopeStm where
     liftEq eq (If b1 t1 e1) (If b2 t2 e2)
         = b1 `eq` b2 && t1 `eq` t2 && e1 `eq` e2
+    liftEq eq (While b1 s1) (While b2 s2)
+        = b1 `eq` b2 && s1 `eq` s2
+    liftEq _ _ _ = False
 
 instance (Eq v, Eq p) => Eq1 (BlockStm v p) where
     liftEq eq (Block vs1 ps1 s1) (Block vs2 ps2 s2) =

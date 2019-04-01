@@ -89,7 +89,7 @@ instance (Functor f, ScopeStm :<: g) => ScopeAlg ScopeStm (Carrier f g) where
         return (while b' s')
 
 instance (Functor f, BlockStm Fresh Fresh :<: g) => ScopeAlg (BlockStm Ident Ident) (Carrier f g) where
-    dem (Block vs ps (Id s)) = Id $ do
+    dem (Block vs ps (Id s)) = Id $ local (fsts vs) (fsts ps) $ do
         vs' <- map2M varName unId vs
         ps' <- map2M procName unId ps
         s'  <- s

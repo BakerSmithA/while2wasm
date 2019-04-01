@@ -6,7 +6,7 @@ import Test.Hspec
 import Front.AST
 import Front.Pretty()
 import Front.Eq()
-import Helper.Co
+import Helper.Co hiding (p)
 import Transform.Rename
 
 type Op    v p = VarExp v :+: AExp :+: BExp :+: VarStm v :+: ProcStm p :+: Stm
@@ -21,24 +21,121 @@ getIVar = getVar
 getFVar :: VarExp Fresh :<: f => Fresh -> Prog f g a
 getFVar = getVar
 
+setIVar :: VarStm Ident :<: f => Ident -> Prog f g () -> Prog f g ()
+setIVar = setVar
+
+setFVar :: VarStm Fresh :<: f => Fresh -> Prog f g () -> Prog f g ()
+setFVar = setVar
+
+callI :: ProcStm Ident :<: f => Ident -> Prog f g ()
+callI = call
+
+callF :: ProcStm Fresh :<: f => Fresh -> Prog f g ()
+callF = call
+
+blockI :: (Functor f, BlockStm Ident Ident :<: g)
+       => [(Ident, Prog f g ())] -> [(Ident, Prog f g ())]
+       -> Prog f g () -> Prog f g ()
+blockI = block
+
+blockF :: (Functor f, BlockStm Fresh Fresh :<: g)
+       => [(Fresh, Prog f g ())] -> [(Fresh, Prog f g ())]
+       -> Prog f g () -> Prog f g ()
+blockF = block
+
 v :: Word -> Fresh
 v = Fresh "v"
+
+p :: Word -> Fresh
+p = Fresh "p"
 
 renameSpec :: Spec
 renameSpec = do
     describe "renaming" $ do
-        context "variables" $ do
-            it "renames getting variables" $ do
-                let a = getIVar "x" :: IWhile
-                    e = getFVar (v 0) :: FWhile
-                rename a `shouldBe` e
+        it "renames getting variables" $ do
+            let a = getIVar "x" :: IWhile
+                e = getFVar (v 0) :: FWhile
+            rename a `shouldBe` e
 
-            it "renames variables in arithmetic expressions" $ do
-                let a = add (getIVar "x") (getIVar "y") :: IWhile
-                    e = add (getFVar (v 0)) (getFVar (v 1)) :: FWhile
-                rename a `shouldBe` e
+        it "renames variables in arithmetic expressions" $ do
+            let a = add (getIVar "x") (getIVar "y") :: IWhile
+                e = add (getFVar (v 0)) (getFVar (v 1)) :: FWhile
+            rename a `shouldBe` e
 
-            it "renames variables in boolean expressions" $ do
-                let a = equ (getIVar "x") (getIVar "y") :: IWhile
-                    e = equ (getFVar (v 0)) (getFVar (v 1)) :: FWhile
-                rename a `shouldBe` e
+        it "renames variables in boolean expressions" $ do
+            let a = equ (getIVar "x") (getIVar "y") :: IWhile
+                e = equ (getFVar (v 0)) (getFVar (v 1)) :: FWhile
+            rename a `shouldBe` e
+
+        it "renames setting variables" $ do
+            let a = setIVar "x"   (num 1) :: IWhile
+                e = setFVar (v 0) (num 1) :: FWhile
+            rename a `shouldBe` e
+
+        it "renames procedures" $ do
+            let a = callI "p" :: IWhile
+                e = callF (p 0) :: FWhile
+            rename a `shouldBe` e
+
+        it "uses existing fresh name" $ do
+            let a = do export (getIVar "x");   export (getIVar "x") :: IWhile
+                e = do export (getFVar (v 0)); export (getFVar (v 0)) :: FWhile
+            rename a `shouldBe` e
+
+        it "renames variables in exports" $ do
+            let a = export (getIVar "x") :: IWhile
+                e = export (getFVar (v 0)) :: FWhile
+            rename a `shouldBe` e
+
+        it "renames variables in if statements" $ do
+            let a = ifElse (equ (getIVar "x") (num 1))
+                        (setIVar "x" (num 1))
+                        (setIVar "y" (num 2)) :: IWhile
+                e = ifElse (equ (getFVar (v 0)) (num 1))
+                        (setFVar (v 0) (num 1))
+                        (setFVar (v 1) (num 2)) :: FWhile
+            rename a `shouldBe` e
+
+        it "renames variables in while statements" $ do
+            let a = while (equ (getIVar "x") (num 1))
+                        (setIVar "y" (num 1)) :: IWhile
+                e = while (equ (getFVar (v 0)) (num 1))
+                        (setFVar (v 1) (num 1)) :: FWhile
+            rename a `shouldBe` e
+
+        it "renames variables in block body" $ do
+            let a = do setIVar "x" (num 1)
+                       blockI [] []
+                           (setIVar "x" (num 1)) :: IWhile
+
+                e = do setFVar (v 0) (num 1)
+                       blockF [] []
+                           (setFVar (v 0) (num 1)) :: FWhile
+
+            rename a `shouldBe` e
+
+        it "gives new names to local variables in block" $ do
+            let a = do setIVar "x" (num 1)
+                       blockI [("x", num 1)] []
+                           (setIVar "x"   (num 1)) :: IWhile
+
+                e = do setFVar (v 0) (num 1)
+                       blockF [(v 1, num 1)] []
+                           (setFVar (v 1) (num 1)) :: FWhile
+
+            rename a `shouldBe` e
+
+        it "uses local names inside procedures" $ do
+            let a = do setIVar "x" (num 1)
+                       blockI
+                           [("x", num 1)]
+                           [("p", setIVar "x" (num 1))]
+                           (setIVar "x"   (num 1)) :: IWhile
+
+                e = do setFVar (v 0) (num 1)
+                       blockF
+                           [(v 1, num 1)]
+                           [(p 0, setFVar (v 1) (num 1))]
+                           (setFVar (v 1) (num 1)) :: FWhile
+
+            rename a `shouldBe` e
