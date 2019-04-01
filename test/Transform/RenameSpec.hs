@@ -37,3 +37,8 @@ renameSpec = do
                 let a = add (getIVar "x") (getIVar "y") :: IWhile
                     e = add (getFVar (v 0)) (getFVar (v 1)) :: FWhile
                 rename a `shouldBe` e
+
+            it "renames variables in boolean expressions" $ do
+                let a = equ (getIVar "x") (getIVar "y") :: IWhile
+                    e = equ (getFVar (v 0)) (getFVar (v 1)) :: FWhile
+                rename a `shouldBe` e

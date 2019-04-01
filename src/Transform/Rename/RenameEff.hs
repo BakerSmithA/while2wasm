@@ -88,10 +88,9 @@ emptyNames = Names Map.empty 0
 -- the current scope.
 addFresh :: Ident -> Names -> (Fresh, Names)
 addFresh ident names = (fresh, names') where
-    names' = names { next=next', seen=seen' }
+    names' = names { next=(next names)+1, seen=seen' }
     seen'  = Map.insert ident fresh (seen names)
-    fresh  = (genFresh names) next'
-    next'  = next names
+    fresh  = (genFresh names) (next names)
 
 -- Returns the mapping from ident to its fresh name, if one exists. Otherwise,
 -- creates a new mapping.
