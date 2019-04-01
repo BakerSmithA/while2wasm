@@ -3,10 +3,9 @@
 -- In this method, the Datatypes a la Carte methods are used to create instances
 -- of typeclasses which describe how to fold over the AST to create the new AST.
 --
--- An advantage of this method is the ease of specifying what the new and old
--- AST contains, i.e. using (:<:). The compiler also picks up errors if try to
+-- An advantage of this method is it is easy to add new mappings from syntax
+-- by creating a new typeclass instance.
 --
--- return a non-fresh variable (but this is common to all methods in investigation).
 -- A disadvantage is the mapping needs to be specified for every datatype
 -- that will be mapped over into the tree. Even if no renaming occurs, such as
 -- is the case for AExp.
