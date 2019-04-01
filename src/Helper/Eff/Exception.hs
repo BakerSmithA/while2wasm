@@ -26,16 +26,16 @@ data Throw k
 
 -- Catch a thrown error of type e.
 data Catch k
-    = Catch' (String -> k) k
+    = Catch' (String -> k)
     deriving Functor
 
 pattern Throw err <- (prj -> Just (Throw' err))
 throw :: Throw :<: f => String -> Prog f g a
 throw err = inject (Throw' err)
 
-pattern Catch hdl inner <- (prj -> Just (Catch' hdl inner))
-catch :: (Functor f, Catch :<: g) => (String -> Prog f g a) -> Prog f g a -> Prog f g a
-catch hdl inner = injectS (fmap (fmap return) (Catch' hdl inner))
+pattern Catch hdl <- (prj -> Just (Catch' hdl))
+catch :: (Functor f, Catch :<: g) => (String -> Prog f g ()) -> Prog f g ()
+catch hdl = injectS (fmap (fmap return) (Catch' hdl))
 
 --------------------------------------------------------------------------------
 -- Semantics
@@ -45,62 +45,60 @@ catch hdl inner = injectS (fmap (fmap return) (Catch' hdl inner))
 -- a new handler is added to the top of 'stack'. This is the handler that will
 -- be used if an exception is encountered inside the catch.
 --
--- Like a Reader, the exception handler is used as the environment
---  Maybe (String -> a) -> m (Either String a)
+-- TODO
+-- Therefore, the carrier we use is a stack of n error handlers, where Ntohing
+-- is used to tie the recursive knot:
+--  m (Either a e)
 
-type ErrHdl a = Maybe (String -> a)
 data CarrierExc f g a (n :: Nat)
-    = Exc { runExc :: ErrHdl (CarrierExc f g a n) -> Prog f g (Either String (CarrierExc' f g a n)) }
+    = Exc { runExc :: Prog f g (Either String (CarrierExc' f g a n)) }
 
 data CarrierExc' f g a :: Nat -> * where
     CZ :: a -> CarrierExc' f g a 'Z
-    CS :: (ErrHdl (CarrierExc f g a n) -> Prog f g (Either String (CarrierExc' f g a n))) -> CarrierExc' f g a ('S n)
+    CS :: (Prog f g (Either String (CarrierExc' f g a n))) -> CarrierExc' f g a ('S n)
 
 genExc :: (Functor f, Functor g) => a -> CarrierExc f g a 'Z
-genExc x = Exc $ \_ -> (return (Right (CZ x)))
+genExc x = Exc (return (Right (CZ x)))
 
 algExc :: (Functor f, Functor g) => Alg (Throw :+: f) (Catch :+: g) (CarrierExc f g a)
 algExc = A a d p where
     a :: (Functor f, Functor g) => (Throw :+: f) (CarrierExc f g a n) -> CarrierExc f g a n
-    -- If an error handler exists, use that to handle the error. Otherwise
-    -- simply return the error.
-    a (Throw err) = undefined
-    a (Other op) = Exc $ \hdl -> (Op (fmap (\(Exc run) -> run hdl) op))
+    -- Don't perform continuation if an error is thrown.
+    a (Throw err) = Exc (return (Left err))
+    a (Other op)  = Exc (Op (fmap runExc op))
 
     d :: (Functor f, Functor g) => (Catch :+: g) (CarrierExc f g a ('S n)) -> CarrierExc f g a n
-    d (Catch newHdl (Exc runExc)) = Exc $ \hdl -> do
-        -- Run prog nested in catch using the exception handler supplied
-        -- with the catch.
-        x <- runExc (Just newHdl)
-        case x of
-            -- Execute the rest of the continuation using the old exception handler.
-            Right (CS runExc') -> runExc' hdl
-            Left err           -> undefined
-
-    d (Other op) = undefined
+    d (Catch hdl) = error "Not implemented"
+    d (Other op)  = Exc (Scope (fmap f op)) where
+        f :: (Functor f, Functor g) => CarrierExc f g a ('S n) -> Prog f g (Prog f g (Either String (CarrierExc' f g a n)))
+        f (Exc runExc) = do
+            r <- runExc
+            case r of
+                Left err     -> return (return (Left err))
+                Right (CS x) -> return x
 
     p :: (Functor f, Functor g) => CarrierExc f g a n -> CarrierExc f g a ('S n)
-    p = undefined
+    p (Exc runExc) = Exc $ do
+        r <- runExc
+        case r of
+            Left err -> return (Left err)
+            Right x  -> return (Right (CS (return (Right x))))
 
 -- Converts any program which might thrown an exception into a program that
 -- returns either its result, or an error.
 handleExc :: (Functor f, Functor g) => Prog (Throw :+: f) (Catch :+: g) a -> Prog f g (Either String a)
 handleExc prog = do
-    r <- runExc (run genExc algExc prog) Nothing
+    r <- runExc (run genExc algExc prog)
     case r of
         Left err     -> return (Left err)
         Right (CZ x) -> return (Right x)
 
-test1 :: Prog (Throw :+: Void) (Catch :+: Void) Int
-test1 = do
+test :: Prog (Throw :+: Void) (Catch :+: Void) Int
+test = do
     throw "Hello"
     return 1
 
-test2 :: Prog (Throw :+: Void) (Catch :+: Void) Int
-test2 = do
-    catch (\_ -> return 2) (return 1)
-
 runTest :: IO ()
 runTest = do
-    let r = (handleVoid . handleExc) test2
+    let r = (handleVoid . handleExc) test
     putStrLn (show r)
