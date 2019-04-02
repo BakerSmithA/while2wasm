@@ -4,7 +4,18 @@
 
 {-# LANGUAGE DataKinds, KindSignatures, GADTs, DeriveFunctor #-}
 
-module Transform.Captures.CaptureEff where
+module Transform.Capture.CaptureEff
+( Var(..)
+, varName
+, Seen
+, Scope
+, set
+, used
+, procScope
+, blockScope
+, Capture
+, handleCaptures
+) where
 
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -58,23 +69,23 @@ data Scope v k
     | BlockScope [v] k
     deriving Functor
 
-type Capture v a = Prog (Seen v) (Scope v) a
+type Capture v = Prog (Seen v) (Scope v) ()
 
 -- Saw a variable on the left hand side of an assignment.
-set :: v -> Capture v ()
+set :: v -> Capture v
 set v = Op (Set v (Var ()))
 
 -- Saw a variable used in an expression, but not assigned to.
-used :: v -> Capture v ()
+used :: v -> Capture v
 used v = Op (Used v (Var ()))
 
 -- If a variable is captured and modified inside c, then said variable should be
 -- a pointer.
-procScope :: Capture v () -> Capture v ()
+procScope :: Capture v -> Capture v
 procScope c = Scope (fmap (fmap return) (ProcScope c))
 
 -- Sets up scoped c to have given local variables.
-blockScope :: [v] -> Capture v () -> Capture v ()
+blockScope :: [v] -> Capture v -> Capture v
 blockScope vs c = Scope (fmap (fmap return) (BlockScope vs c))
 
 --------------------------------------------------------------------------------
@@ -162,6 +173,6 @@ algC = A a d p where
     p :: Ord v => Carrier v a n -> Carrier v a ('S n)
     p c = C $ \env -> (CS (runC c), env)
 
-runCapture :: Ord v => Capture v a -> Map v VarType
-runCapture c = case (runC (run genC algC c) emptyEnv) of
+handleCaptures :: Ord v => Capture v -> Map v VarType
+handleCaptures c = case (runC (run genC algC c) emptyEnv) of
     (_, (_, mapping)) -> mapping

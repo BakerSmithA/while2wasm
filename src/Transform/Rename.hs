@@ -9,7 +9,7 @@ module Transform.Rename
 , rename
 ) where
 
-import Transform.Rename.AST_01
+import Transform.Rename.AST
 import Transform.Rename.RenameEff
 import Helper.Prog
 import Helper.Alg

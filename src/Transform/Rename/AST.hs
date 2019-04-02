@@ -13,7 +13,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, FlexibleContexts #-}
 
-module Transform.Rename.AST_01
+module Transform.Rename.AST
 ( RenameHandler
 , Carrier
 ) where
