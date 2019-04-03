@@ -2,6 +2,7 @@ module Main where
 
 import Test.Hspec
 import Front.Parse.ParserSpec
+import Front.Parse.RecSpec
 import Helper.Eff.StateSpec
 import Helper.Eff.FreshSpec
 import Helper.Eff.ReaderSpec
@@ -12,6 +13,7 @@ main :: IO ()
 main = hspec specs where
     specs = do
         parserSpec
+        recSpec
         stateSpec
         freshSpec
         readerSpec
