@@ -5,9 +5,10 @@
 
 {-# LANGUAGE ViewPatterns, PatternSynonyms, TypeOperators, DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts, DataKinds, KindSignatures, GADTs #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Transform.Rename.RenameEff
-( FreshName(..)
+( FreshName
 , Rename
 , LocalName
 , name
@@ -26,17 +27,15 @@ import Helper.Co
 import Helper.Eff.State
 import Helper.Eff.Fresh
 import Helper.Eff
-import Debug.Trace
 
 --------------------------------------------------------------------------------
 -- Syntax
 --------------------------------------------------------------------------------
 
-type Prefix = String
-data FreshName = FreshName Prefix Word deriving (Eq, Show)
+type FreshName = Word
 
 instance Pretty FreshName where
-    pretty (FreshName pre i) = do text pre; showable i
+    pretty n = do text "$"; showable n
 
 -- v is the type of variables to be renamed.
 data Rename v k
@@ -84,9 +83,8 @@ insFresh :: (Functor f, Functor g, Ord v)
 insFresh v = do
     env <- get
     next <- fresh
-    let f = FreshName "v" next
-    put (Map.insert v f env)
-    return f
+    put (Map.insert v next env)
+    return next
 
 -- Creates a mapping from each variable to a fresh name, and updates state,
 -- returning updated state.

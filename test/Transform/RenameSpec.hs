@@ -45,10 +45,10 @@ blockF :: (Functor f, BlockStm FreshName FreshName :<: g)
 blockF = block
 
 v :: Word -> FreshName
-v = FreshName "v"
+v = id
 
 p :: Word -> FreshName
-p = FreshName "p"
+p = id
 
 renameSpec :: Spec
 renameSpec = do
