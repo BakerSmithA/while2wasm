@@ -6,31 +6,32 @@ import Test.Hspec
 import Front.AST
 import Front.Pretty()
 import Front.Eq()
-import Helper.Co hiding (p)
+import Helper.Prog hiding (p)
+import Helper.Co
 import Transform.Rename
 
 type Op    v p = VarExp v :+: AExp :+: BExp :+: VarStm v :+: ProcStm p :+: Stm
 type Scope v p = ScopeStm :+: BlockStm v p
 type While v p = Prog (Op v p) (Scope v p) ()
 type IWhile    = While Ident Ident
-type FWhile    = While Fresh Fresh
+type FWhile    = While FreshName FreshName
 
 getIVar :: VarExp Ident :<: f => Ident -> Prog f g a
 getIVar = getVar
 
-getFVar :: VarExp Fresh :<: f => Fresh -> Prog f g a
+getFVar :: VarExp FreshName :<: f => FreshName -> Prog f g a
 getFVar = getVar
 
 setIVar :: VarStm Ident :<: f => Ident -> Prog f g () -> Prog f g ()
 setIVar = setVar
 
-setFVar :: VarStm Fresh :<: f => Fresh -> Prog f g () -> Prog f g ()
+setFVar :: VarStm FreshName :<: f => FreshName -> Prog f g () -> Prog f g ()
 setFVar = setVar
 
 callI :: ProcStm Ident :<: f => Ident -> Prog f g ()
 callI = call
 
-callF :: ProcStm Fresh :<: f => Fresh -> Prog f g ()
+callF :: ProcStm FreshName :<: f => FreshName -> Prog f g ()
 callF = call
 
 blockI :: (Functor f, BlockStm Ident Ident :<: g)
@@ -38,16 +39,16 @@ blockI :: (Functor f, BlockStm Ident Ident :<: g)
        -> Prog f g () -> Prog f g ()
 blockI = block
 
-blockF :: (Functor f, BlockStm Fresh Fresh :<: g)
-       => [(Fresh, Prog f g ())] -> [(Fresh, Prog f g ())]
+blockF :: (Functor f, BlockStm FreshName FreshName :<: g)
+       => [(FreshName, Prog f g ())] -> [(FreshName, Prog f g ())]
        -> Prog f g () -> Prog f g ()
 blockF = block
 
-v :: Word -> Fresh
-v = Fresh "v"
+v :: Word -> FreshName
+v = FreshName "v"
 
-p :: Word -> Fresh
-p = Fresh "p"
+p :: Word -> FreshName
+p = FreshName "p"
 
 renameSpec :: Spec
 renameSpec = do

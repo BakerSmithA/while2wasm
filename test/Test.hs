@@ -5,6 +5,7 @@ import Front.Parse.ParserSpec
 import Helper.Eff.StateSpec
 import Helper.Eff.FreshSpec
 import Transform.Rename.RenameEffSpec
+import Transform.RenameSpec
 
 main :: IO ()
 main = hspec specs where
@@ -13,3 +14,4 @@ main = hspec specs where
         stateSpec
         freshSpec
         renameEffSpec
+        renameSpec
