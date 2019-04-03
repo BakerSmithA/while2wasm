@@ -28,6 +28,14 @@ renameEffSpec = do
             let p = do v1 <- name "x"; v2 <- name "x"; return (v1, v2) :: P (FreshName, FreshName)
             runP p `shouldBe` (FreshName "v" 0, FreshName "v" 0)
 
+        it "returns true if a variable exists" $ do
+            let p = do name "x"; ex <- exists "x"; return ex :: P Bool
+            runP p `shouldBe` True
+
+        it "returns false if a variable does not exist" $ do
+            let p = do ex <- exists "x"; return ex :: P Bool
+            runP p `shouldBe` False
+
         it "gives fresh names to existing varibles in local scope" $ do
             let p = do v1 <- name "x"; v2 <- localNames ["x"] (name "x"); return (v1, v2) :: P (FreshName, FreshName)
             runP p `shouldBe` (FreshName "v" 0, FreshName "v" 1)

@@ -126,6 +126,11 @@ algRn = A a d p where
                f <- insFresh v
                runRn (fk f)
 
+    a (Exists v fk) = Rn $ do
+        env <- get
+        let exists = v `Map.member` (env :: Names)
+        runRn (fk exists)
+
     a (Other op) = Rn (Op (fmap runRn (R (R op))))
 
     d :: (Functor f, Functor g) => (LocalName :+: g) (CarrierRn f g a ('S n)) -> CarrierRn f g a n
