@@ -4,6 +4,7 @@ import Test.Hspec
 import Front.Parse.ParserSpec
 import Helper.Eff.StateSpec
 import Helper.Eff.FreshSpec
+import Helper.Eff.ReaderSpec
 import Transform.Rename.RenameEffSpec
 import Transform.RenameSpec
 
@@ -13,5 +14,6 @@ main = hspec specs where
         parserSpec
         stateSpec
         freshSpec
+        readerSpec
         renameEffSpec
         renameSpec
