@@ -32,9 +32,8 @@ data State s k
 
 data LocalSt s k
     -- Creates a block where state is local. State after the local block is
-    -- restored using the given function, which takes state before entering
-    -- local, and state at end of local, and returns state to be used after.
-    = Local' s (s -> s -> s) k
+    -- restored to state before entering.
+    = Local' s k
     deriving Functor
 
 pattern Get fk <- (prj -> Just (Get' fk))
@@ -45,9 +44,9 @@ pattern Put s k <- (prj -> Just (Put' s k))
 put :: (Functor f, Functor g, State s :<: f) => s -> Prog f g ()
 put s = inject (Put' s (Var ()))
 
-pattern Local s combine k <- (prj -> Just (Local' s combine k))
-local :: (Functor f, Functor g, LocalSt s :<: g) => s -> (s -> s -> s) -> Prog f g a -> Prog f g a
-local s combine inner = injectS (fmap (fmap return) (Local' s combine inner))
+pattern Local s k <- (prj -> Just (Local' s k))
+local :: (Functor f, Functor g, LocalSt s :<: g) => s -> Prog f g a -> Prog f g a
+local s inner = injectS (fmap (fmap return) (Local' s inner))
 
 --------------------------------------------------------------------------------
 -- Semantics
@@ -71,11 +70,11 @@ algSt = A a d p where
     a (Other op) = St $ \s -> Op (fmap (\(St run) -> run s) op)
 
     d :: (Functor f, Functor g) => (LocalSt s :+: g) (Carrier f g s a ('S n)) -> Carrier f g s a n
-    d (Local s' combine k) = St $ \s -> do
+    d (Local s' k) = St $ \s -> do
         -- Run nested continuation with inner-state
         (CS run', s'') <- runSt k s'
-        -- Run after nested continuation with original state combined with inner state.
-        run' (combine s s'')
+        -- Run after nested continuation with original state.
+        run' s
 
     d (Other op) = St $ \s -> Scope (fmap (\(St run) -> fmap f (run s)) op) where
         f :: (Carrier' f g s a ('S n), s) -> Prog f g (Carrier' f g s a n, s)

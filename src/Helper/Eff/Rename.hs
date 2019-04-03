@@ -16,6 +16,7 @@ module Transform.Rename.RenameEff
 , handleRename
 ) where
 
+import Control.Monad (mapM_)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Front.AST (Ident)
@@ -72,6 +73,29 @@ localNames vs inner = injectS (fmap (fmap return) (Local' vs inner))
 
 type Names = Map String FreshName
 
+emptyNames :: Names
+emptyNames = Map.empty
+
+-- Creates a mapping from v to a fresh variable name, and updates state.
+insFresh :: (Functor f, Functor g)
+         => String -> Prog (State Names :+: Fresh :+: f) (LocalSt Names :+: g) FreshName
+insFresh v = do
+    env <- get
+    next <- fresh
+    let f = FreshName "v" next
+    put (Map.insert v f env)
+    return f
+
+-- Creates a mapping from each variable to a fresh name, and updates state,
+-- returning updated state.
+insManyFresh :: (Functor f, Functor g)
+             => [String] -> Prog (State Names :+: Fresh :+: f) (LocalSt Names :+: g) Names
+insManyFresh vs = do mapM_ insFresh vs; get
+
+-- Overwrites duplicate entries with old variable names.
+restoreNames :: Names -> Names -> Names
+restoreNames old new = Map.union old new
+
 -- Describe renaming in terms of State and FreshName effect handlers.
 
 type Carrier f g a = CarrierId (Prog (State Names :+: Fresh :+: f) (LocalSt Names :+: g) a)
@@ -86,23 +110,35 @@ algRn = A a d p where
             Just fresh -> unId (fk fresh)
             -- No mapping exists, so create a new one.
             Nothing -> do
-                next <- fresh
-                let f = FreshName "v" next
-                put (Map.insert v f env)
+                f <- insFresh v
                 unId (fk f)
 
-    a (Other op) = undefined
+    a (Other op) = Id (Op (fmap unId (R (R op))))
 
     d :: (Functor f, Functor g) => (LocalName :+: g) (Carrier f g a ('S n)) -> Carrier f g a n
-    d = undefined
+    d (Local vs k) = Id $ do
+        saved <- get
+        ins   <- insManyFresh vs
+
+        -- Want to propagate out any newly added mappings of names to fresh names.
+        (r, localEnv) <- local ins (do
+            r <- unId k
+            e <- get
+            return (r, e))
+
+        put (restoreNames saved localEnv)
+        return r
 
     p :: (Functor f, Functor g) => Carrier f g a n -> Carrier f g a ('S n)
-    p = undefined
+    p (Id prog) = Id prog
 
 mkRename :: (Functor f, Functor g)
          => Prog (Rename :+: f) (LocalName :+: g) a
          -> Prog (State Names :+: Fresh :+: f) (LocalSt Names :+: g) a
-mkRename = undefined
+mkRename = runId (Id . return) algRn
 
 handleRename :: (Functor f, Functor g) => Prog (Rename :+: f) (LocalName :+: g) a -> Prog f g a
-handleRename = undefined
+handleRename prog = do
+    -- Discard resulting Names, and next Fresh
+    ((x, _), _) <- (handleFresh . handleState emptyNames . mkRename) prog
+    return x
