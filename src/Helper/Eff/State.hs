@@ -1,5 +1,5 @@
 
--- Generic compositional state effect handler.
+-- Generic state effect handler.
 
 {-# LANGUAGE DeriveFunctor, TypeOperators, GADTs, DataKinds, KindSignatures #-}
 {-# LANGUAGE FlexibleContexts #-}
