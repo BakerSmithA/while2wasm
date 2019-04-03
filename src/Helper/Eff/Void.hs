@@ -4,8 +4,7 @@
 {-# LANGUAGE DeriveFunctor, KindSignatures, DataKinds #-}
 
 module Helper.Eff.Void
-( module Helper.Prog
-, Void
+( Void
 , handleVoid
 ) where
 

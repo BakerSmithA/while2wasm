@@ -5,8 +5,7 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 
 module Helper.Co
-( module Helper.Prog
-, (:+:)(..)
+( (:+:)(..)
 , (:<:)(..)
 , inject
 , injectS

@@ -4,6 +4,8 @@
 {-# LANGUAGE DeriveFunctor, TypeOperators, FlexibleContexts #-}
 
 module Front.AST where
+
+import Helper.Prog
 import Helper.Co
 
 -- Type of variables.
