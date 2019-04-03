@@ -26,13 +26,14 @@ import Helper.Co
 import Helper.Eff.State
 import Helper.Eff.Fresh
 import Helper.Eff
+import Debug.Trace
 
 --------------------------------------------------------------------------------
 -- Syntax
 --------------------------------------------------------------------------------
 
 type Prefix = String
-data FreshName  = FreshName Prefix Word deriving Eq
+data FreshName = FreshName Prefix Word deriving (Eq, Show)
 
 instance Pretty FreshName where
     pretty (FreshName pre i) = do text pre; showable i
@@ -107,11 +108,11 @@ algRn = A a d p where
         env <- get
         case Map.lookup v env of
             -- Mapping already exists, so just return it.
-            Just fresh -> unId (fk fresh)
+            Just fresh -> trace ("Exists: " ++ v ++ " -> " ++ show fresh) $ unId (fk fresh)
             -- No mapping exists, so create a new one.
             Nothing -> do
                 f <- insFresh v
-                unId (fk f)
+                trace ("New: " ++ v ++ " -> " ++ show f) $ unId (fk f)
 
     a (Other op) = Id (Op (fmap unId (R (R op))))
 
@@ -127,7 +128,7 @@ algRn = A a d p where
             return (r, e))
 
         put (restoreNames saved localEnv)
-        return r
+        trace ("Saved: " ++ show saved ++ ", Local: " ++ show localEnv ++ ", Restored: " ++ show (restoreNames saved localEnv)) $ return r
 
     p :: (Functor f, Functor g) => Carrier f g a n -> Carrier f g a ('S n)
     p (Id prog) = Id prog

@@ -4,7 +4,7 @@ import Test.Hspec
 import Front.Parse.ParserSpec
 import Helper.Eff.StateSpec
 import Helper.Eff.FreshSpec
--- import Transform.RenameSpec
+import Transform.Rename.RenameEffSpec
 
 main :: IO ()
 main = hspec specs where
@@ -12,4 +12,4 @@ main = hspec specs where
         parserSpec
         stateSpec
         freshSpec
-        -- renameSpec
+        renameEffSpec
