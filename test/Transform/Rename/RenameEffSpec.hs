@@ -8,7 +8,7 @@ import Helper.Prog
 import Helper.Co
 import Helper.Eff.Void
 
-type P = Prog (Rename :+: Void) (LocalName :+: Void)
+type P = Prog (Rename String :+: Void) (LocalName String :+: Void)
 
 runP :: P a -> a
 runP = handleVoid . handleRename
@@ -50,7 +50,7 @@ renameEffSpec = do
 
         it "persists new mappings outside scope" $ do
             let p = do name "x"
-                       localNames [] (name "y")
+                       localNames ([] :: [String]) (name "y")
                        v <- name "y"
                        return v :: P FreshName
 
