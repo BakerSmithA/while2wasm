@@ -1,5 +1,5 @@
 
--- Generalised compositional state effect handler.
+-- Generic compositional state effect handler.
 
 {-# LANGUAGE DeriveFunctor, TypeOperators, GADTs, DataKinds, KindSignatures #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -87,4 +87,4 @@ algSt = A a d p where
 handleState :: (Functor f, Functor g) => s -> Prog (State s :+: f) (LocalSt s :+: g) a -> Prog f g (a, s)
 handleState s prog = do
     (CZ prog', s') <- runSt (run genSt algSt prog) s
-    return (prog', s') 
+    return (prog', s')
