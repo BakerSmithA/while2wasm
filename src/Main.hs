@@ -14,7 +14,12 @@ import Helper.Co
 type Op    v p = VarExp v :+: AExp :+: BExp :+: VarStm v :+: ProcStm p :+: Stm
 type Scope v p = ScopeStm :+: BlockStm v p
 type While v p = Prog (Op v p) (Scope v p) ()
-type IWhile    = While Ident Ident
+
+tryRename :: While Ident Ident -> IO (While FreshName FreshName)
+tryRename ast = do
+    case rename ast of
+        Left err -> ioError (userError err)
+        Right rn -> return rn
 
 runComp :: FilePath -> FilePath -> IO ()
 runComp inPath outPath = do
@@ -22,9 +27,11 @@ runComp inPath outPath = do
     case runParser stms inPath contents of
         Left err -> putStrLn (errorBundlePretty err)
         Right parsed -> do
-            let ast = prog parsed :: IWhile
+            let ast = prog parsed :: While Ident Ident
+            rn  <- tryRename ast
 
             putStrLn (show ast)
+            putStrLn (show rn)
 
 main :: IO ()
 main = do
