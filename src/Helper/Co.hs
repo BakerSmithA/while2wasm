@@ -31,6 +31,7 @@ class (Functor sub, Functor sup) => sub :<: sup where
     -- Partial inverse, useful for pattern matching on expressions.
     prj :: sup a -> Maybe (sub a)
 
+-- Base case.
 instance Functor f => f :<: f where
     inj = id
     prj = Just
