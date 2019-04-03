@@ -71,9 +71,9 @@ algSt = A a d p where
 
     d :: (Functor f, Functor g) => (LocalSt s :+: g) (Carrier f g s a ('S n)) -> Carrier f g s a n
     d (Local s' k) = St $ \s -> do
-        -- Run nested continuation with inner-state
+        -- Run nested continuation with inner-state.
         (CS run', s'') <- runSt k s'
-        -- Run after nested continuation with original state.
+        -- Run remaining continuation (after nested continuation) in original state.
         run' s
 
     d (Other op) = St $ \s -> Scope (fmap (\(St run) -> fmap f (run s)) op) where

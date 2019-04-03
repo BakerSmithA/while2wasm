@@ -4,7 +4,7 @@
 -- to ensure procedures have been defined before being used.
 
 {-# LANGUAGE ViewPatterns, PatternSynonyms, TypeOperators, DeriveFunctor #-}
-{-# LANGUAGE FlexibleContexts, DataKinds #-}
+{-# LANGUAGE FlexibleContexts, DataKinds, KindSignatures, GADTs #-}
 
 module Transform.Rename.RenameEff
 ( FreshName(..)
@@ -99,44 +99,69 @@ restoreNames old new = Map.union old new
 
 -- Describe renaming in terms of State and FreshName effect handlers.
 
-type Carrier f g a = CarrierId (Prog (State Names :+: Fresh :+: f) (LocalSt Names :+: g) a)
+type P f g a = Prog (State Names :+: Fresh :+: f) (LocalSt Names :+: g) a
 
-algRn :: (Functor f, Functor g) => Alg (Rename :+: f) (LocalName :+: g) (Carrier f g a)
+-- Need to use carriers using CZ and CS because the state needs to be updated
+-- after running local continuation, before running remaining continuation.
+data CarrierRn f g a n
+    = Rn { runRn :: P f g (CarrierRn' f g a n) }
+
+data CarrierRn' f g a :: Nat -> * where
+    CZ :: a -> CarrierRn' f g a 'Z
+    CS :: (P f g (CarrierRn' f g a n)) -> CarrierRn' f g a ('S n)
+
+genRn :: (Functor f, Functor g) => a -> CarrierRn f g a 'Z
+genRn x = Rn (return (CZ x))
+
+algRn :: (Functor f, Functor g) => Alg (Rename :+: f) (LocalName :+: g) (CarrierRn f g a)
 algRn = A a d p where
-    a :: (Functor f, Functor g) => (Rename :+: f) (Carrier f g a n) -> Carrier f g a n
-    a (Name v fk) = Id $ do
+    a :: (Functor f, Functor g) => (Rename :+: f) (CarrierRn f g a n) -> CarrierRn f g a n
+    a (Name v fk) = Rn $ do
         env <- get
         case Map.lookup v env of
-            -- Mapping already exists, so just return it.
-            Just fresh -> trace ("Exists: " ++ v ++ " -> " ++ show fresh) $ unId (fk fresh)
-            -- No mapping exists, so create a new one.
-            Nothing -> do
-                f <- insFresh v
-                trace ("New: " ++ v ++ " -> " ++ show f) $ unId (fk f)
+           -- Mapping already exists, so just return it.
+           Just fresh -> runRn (fk fresh)
+           -- No mapping exists, so create a new one.
+           Nothing -> do
+               f <- insFresh v
+               runRn (fk f)
 
-    a (Other op) = Id (Op (fmap unId (R (R op))))
+    a (Other op) = Rn (Op (fmap runRn (R (R op))))
 
-    d :: (Functor f, Functor g) => (LocalName :+: g) (Carrier f g a ('S n)) -> Carrier f g a n
-    d (Local vs k) = Id $ do
-        saved <- get
+    d :: (Functor f, Functor g) => (LocalName :+: g) (CarrierRn f g a ('S n)) -> CarrierRn f g a n
+    d (Local vs k) = Rn $ do
+        saved <- getNames
         ins   <- insManyFresh vs
 
-        -- Want to propagate out any newly added mappings of names to fresh names.
-        (r, localEnv) <- local ins (do
-            r <- unId k
+        -- Run nested continuation with local state.
+        -- run' is the continuation remaining after the local continuation.
+        -- Before running this the state is restored.
+        (CS run', localEnv) <- local ins (do
+            r <- runRn k
             e <- get
-            return (r, e))
+            return (r, e :: Names))
 
+        -- Run remaining continuation with restored state.
         put (restoreNames saved localEnv)
-        trace ("Saved: " ++ show saved ++ ", Local: " ++ show localEnv ++ ", Restored: " ++ show (restoreNames saved localEnv)) $ return r
+        run'
 
-    p :: (Functor f, Functor g) => Carrier f g a n -> Carrier f g a ('S n)
-    p (Id prog) = Id prog
+    d (Other op) = Rn (Scope (fmap (\(Rn prog) -> fmap f prog) (R op))) where
+        f :: (Functor f, Functor g) => CarrierRn' f g a ('S n) -> P f g (CarrierRn' f g a n)
+        f (CS prog) = prog
+
+    getNames :: (Functor f, Functor g) => Prog (State Names :+: f) (LocalSt Names :+: g) Names
+    getNames = get
+
+    p :: (Functor f, Functor g) => CarrierRn f g a n -> CarrierRn f g a ('S n)
+    p (Rn runRn) = Rn (return (CS runRn))
 
 mkRename :: (Functor f, Functor g)
          => Prog (Rename :+: f) (LocalName :+: g) a
          -> Prog (State Names :+: Fresh :+: f) (LocalSt Names :+: g) a
-mkRename = runId (Id . return) algRn
+mkRename prog = case run genRn algRn prog of
+    (Rn prog') -> do
+        (CZ x) <- prog'
+        return x
 
 handleRename :: (Functor f, Functor g) => Prog (Rename :+: f) (LocalName :+: g) a -> Prog f g a
 handleRename prog = do
