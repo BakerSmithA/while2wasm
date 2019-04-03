@@ -1,6 +1,6 @@
 
 -- Composite scoped effect handler to perform renaming, implemented using
--- extensible effects methods. Allows other effects to be added, e.g. exceptions
+-- composite effects methods. Allows other effects to be added, e.g. exceptions
 -- to ensure procedures have been defined before being used.
 
 {-# LANGUAGE ViewPatterns, PatternSynonyms, TypeOperators, DeriveFunctor #-}
@@ -157,11 +157,11 @@ restoreEnv old new = Env vs ps where
 
 -- Same idea State from Syntax and Semantics for Operations with Scope.
 data CarrierRN f g a n
-    = RN { runRN :: Env -> (Prog f g (CarrierRN' f g a n, Env)) }
+    = RN { runRN :: Env -> Prog f g (CarrierRN' f g a n, Env) }
 
 data CarrierRN' f g a :: Nat -> * where
     CZ :: a -> CarrierRN' f g a 'Z
-    CS :: (Env -> (Prog f g (CarrierRN' f g a n, Env))) -> CarrierRN' f g a ('S n)
+    CS :: (Env -> Prog f g (CarrierRN' f g a n, Env)) -> CarrierRN' f g a ('S n)
 
 genRN :: (Functor f, Functor g) => a -> CarrierRN f g a 'Z
 genRN x = RN $ \env -> (return (CZ x, env))
