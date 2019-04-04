@@ -96,18 +96,21 @@ insManyFresh vs = do mapM_ insFresh vs; get
 restoreNames :: Ord v => Names v -> Names v -> Names v
 restoreNames old new = Map.union old new
 
+getNames :: (Functor f, Functor g) => Prog (State (Names v) :+: f) (LocalSt (Names v) :+: g) (Names v)
+getNames = get
+
 -- Describe renaming in terms of State and FreshName effect handlers.
 
-type P f g v a = Prog (State (Names v) :+: Fresh :+: f) (LocalSt (Names v) :+: g) a
+type Hdl f g v a = Prog (State (Names v) :+: Fresh :+: f) (LocalSt (Names v) :+: g) a
 
 -- Need to use carriers using CZ and CS because the state needs to be updated
 -- after running local continuation, before running remaining continuation.
 data CarrierRn f g v a n
-    = Rn { runRn :: P f g v (CarrierRn' f g v a n) }
+    = Rn { runRn :: Hdl f g v (CarrierRn' f g v a n) }
 
 data CarrierRn' f g v a :: Nat -> * where
     CZ :: a -> CarrierRn' f g v a 'Z
-    CS :: (P f g v (CarrierRn' f g v a n)) -> CarrierRn' f g v a ('S n)
+    CS :: (Hdl f g v (CarrierRn' f g v a n)) -> CarrierRn' f g v a ('S n)
 
 genRn :: (Functor f, Functor g) => a -> CarrierRn f g v a 'Z
 genRn x = Rn (return (CZ x))
@@ -150,11 +153,8 @@ algRn = A a d p where
         run'
 
     d (Other op) = Rn (Scope (fmap (\(Rn prog) -> fmap f prog) (R op))) where
-        f :: (Functor f, Functor g) => CarrierRn' f g v a ('S n) -> P f g v (CarrierRn' f g v a n)
+        f :: (Functor f, Functor g) => CarrierRn' f g v a ('S n) -> Hdl f g v (CarrierRn' f g v a n)
         f (CS prog) = prog
-
-    getNames :: (Functor f, Functor g) => Prog (State (Names v) :+: f) (LocalSt (Names v) :+: g) (Names v)
-    getNames = get
 
     p :: (Functor f, Functor g) => CarrierRn f g v a n -> CarrierRn f g v a ('S n)
     p (Rn runRn) = Rn (return (CS runRn))
