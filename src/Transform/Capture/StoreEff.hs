@@ -24,6 +24,9 @@ import Helper.Co
 import Helper.Eff.State
 import Helper.Eff
 
+-- Type needs to wrap each variable in AST because the same variable at
+-- different points in the AST may be local or foreign. This is unlike whether
+-- a variable is dirty or clean, which is a global property of each variable.
 data Store v
     -- Variable local to a level of scope.
     = Local v

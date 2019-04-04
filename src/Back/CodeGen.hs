@@ -9,6 +9,11 @@ module Back.CodeGen where
 
 import Transform.Rename (FreshName)
 import Back.WASM
+import Helper.Prog
+
+--------------------------------------------------------------------------------
+-- Syntax
+--------------------------------------------------------------------------------
 
 -- Type of variable from source language.
 type SrcVar  = FreshName
@@ -24,7 +29,7 @@ data Emit k
     -- function's stack frame.
     | GetSP (GlobalName -> k)
     -- Get offset of a local variable from the stack pointer.
-    | GetSPOffset SrcVar (MemOffset -> k)
+    | GetSPOffset SrcVar (Word -> k)
     -- Returns names of arguments to a function, i.e. the variables in
     -- the current scope that should be pushed onto the stack before calling
     -- the function.
@@ -44,3 +49,33 @@ data Block k
     -- Once scope is exited, the instructions will be placed in a function.
     | Function FuncName [LocalName] DoesRet k
     deriving Functor
+
+type CodeGen = Prog Emit Block
+
+emit :: WASM () -> CodeGen ()
+emit i = Op (Emit i (Var ()))
+
+getInstr :: CodeGen (WASM ())
+getInstr = Op (GetInstr Var)
+
+getSP :: CodeGen GlobalName
+getSP = Op (GetSP Var)
+
+getSPOffset :: SrcVar -> CodeGen Word
+getSPOffset v = Op (GetSPOffset v Var)
+
+getArgs :: SrcProc -> CodeGen [SrcVar]
+getArgs fname = Op (GetArgs fname Var)
+
+-- TODO
+getVarType :: SrcVar -> CodeGen SrcVar
+getVarType v = Op (GetVarType v Var)
+
+-- Returns instructions emitted in the block allowing them to be wrapped up
+-- in a WASM control structure, e.g. BLOCK.
+codeBlock :: CodeGen () -> CodeGen (WASM ())
+codeBlock inner = Scope (fmap (fmap return) (CodeBlock (do inner; getInstr)))
+
+-- Emits nested instructions to a new function.
+function :: FuncName -> [LocalName] -> DoesRet -> CodeGen a -> CodeGen a
+function name args ret body = Scope (fmap (fmap return) (Function name args ret body))
