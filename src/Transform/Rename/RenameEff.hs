@@ -162,8 +162,8 @@ algRn = A a d p where
     p :: (Functor f, Functor g) => CarrierRn f g v a n -> CarrierRn f g v a ('S n)
     p (Rn runRn) = Rn (return (CS runRn))
 
-mkRename :: (Functor f, Functor g, Ord v) => Prog (Rename v :+: f) (LocalName v :+: g) a -> Hdl f g v a
-mkRename prog = case run genRn algRn prog of
+mkHdl :: (Functor f, Functor g, Ord v) => Prog (Rename v :+: f) (LocalName v :+: g) a -> Hdl f g v a
+mkHdl prog = case run genRn algRn prog of
     (Rn prog') -> do
         (CZ x) <- prog'
         return x
@@ -174,5 +174,5 @@ handleRename prog = do
     -- The fresh is global, indicated by wrapping around the state. Therefore,
     -- getting a new fresh inside scoped state still gives a globally fresh
     -- value.
-    ((x, st), fresh) <- (handleFresh . handleState emptyNames . mkRename) prog
+    ((x, st), fresh) <- (handleFresh . handleState emptyNames . mkHdl) prog
     return x
