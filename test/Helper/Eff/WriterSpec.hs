@@ -18,7 +18,7 @@ writerSpec = do
     describe "writer effect handler" $ do
         it "no telling leaves empty environment" $ do
             let p = return 1 :: P Int
-            runP p  `shouldBe` (1, [])
+            runP p  `shouldBe` (1, "")
 
         it "telling writes to environment" $ do
             let p = do tell "a"; tell "b"; tell "c"; return 1 :: P Int

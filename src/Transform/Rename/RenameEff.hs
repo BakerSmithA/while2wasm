@@ -98,7 +98,9 @@ restoreNames old new = Map.union old new
 
 -- Describe renaming in terms of State and FreshName effect handlers.
 
--- TODO: What is the effect of swapping State and Fresh handlers.
+-- This ordering of effect handlers ensures the fresh is global, and so
+-- even inside local scope of a state, globally fresh values will be produced.
+-- Also see `handleRename` function.
 type Hdl f g v a = Prog (State (Names v) :+: Fresh :+: f) (LocalSt (Names v) :+: g) a
 
 -- Need to use carriers using CZ and CS because the state needs to be updated
@@ -170,6 +172,9 @@ mkRename prog = case run genRn algRn prog of
 
 handleRename :: (Functor f, Functor g, Ord v) => Prog (Rename v :+: f) (LocalName v :+: g) a -> Prog f g a
 handleRename prog = do
-    -- Discard resulting Names, and next Fresh
-    ((x, _), _) <- (handleFresh . handleState emptyNames . mkRename) prog
+    -- Discard resulting Names, and next fresh.
+    -- The fresh is global, indicated by wrapping around the state. Therefore,
+    -- getting a new fresh inside scoped state still gives a globally fresh
+    -- value.
+    ((x, st), fresh) <- (handleFresh . handleState emptyNames . mkRename) prog
     return x
