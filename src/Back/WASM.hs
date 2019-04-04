@@ -17,6 +17,7 @@ module Back.WASM
 , BinOp(..)
 , RelOp(..)
 , WASM
+, DoesRet
 , Func(..)
 , Mutability(..)
 , Global(..)
@@ -140,9 +141,11 @@ data Control k
 type Op     = Instr :+: ArithInstr :+: VarInstr :+: MemInstr :+: BranchInstr
 type WASM a = Prog Op Control a
 
+type DoesRet = Bool
+
 data Func = Func {
     name    :: FuncName
-  , doesRet :: Bool
+  , doesRet :: DoesRet
   , locals  :: [LocalName]
   , params  :: [LocalName]
   , body    :: WASM ()
