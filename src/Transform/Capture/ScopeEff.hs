@@ -10,12 +10,19 @@
 -- of a variable must be annotated with the same type.
 
 {-# LANGUAGE ViewPatterns, PatternSynonyms, TypeOperators, DeriveFunctor #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts, DataKinds, KindSignatures, GADTs #-}
 
 module Transform.Capture.ScopeEff where
 
+import Data.Map (Map)
+import qualified Data.Map as Map
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Helper.Prog
 import Helper.Co
+import Helper.Eff.State
+import Helper.Eff.Fresh
+import Helper.Eff.Writer
 
 data ScopeMod v
     -- Variable is not modified across different scopes.
@@ -62,3 +69,24 @@ scope inner = injectS (fmap (fmap return) (Scope' inner))
 --  - Statefully keeping track of current scope index
 --  - Stateful mapping from variable names to scope last modified in
 --  - Set of dirty variables that is written out to
+
+-- Each scope is given a unique index.
+type ScopeIdx    = Word
+-- Mapping from variables to the scope they were modified in. If try to write
+-- a different scope index than already exists then the variable is dirty.
+type LastScope v = Map v ScopeIdx
+-- All dirty variables found.
+type DirtyVars v = Set v
+
+-- Ordering ensures writer and fresh are global. However this is not strictly
+-- necessary as the local scoping is not used.
+type Op  f v     = State   (LastScope v) :+: State   ScopeIdx :+: Tell (DirtyVars v) :+: Fresh :+: f
+type Sc  g v     = LocalSt (LastScope v) :+: LocalSt ScopeIdx :+: g
+type Hdl f g v a = Prog (Op f v) (Sc g v) a
+
+data CarrierSc f g v a n
+    = Sc { runSc :: Hdl f g v (CarrierSc' f g v a n) }
+
+data CarrierSc' f g v a :: Nat -> * where
+    CZ :: a -> CarrierSc' f g v a 'Z
+    CS :: (Hdl f g v (CarrierSc' f g v a n)) -> CarrierSc' f g v a ('S n)
