@@ -1,7 +1,10 @@
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE KindSignatures, DataKinds #-}
-{-# LANGUAGE ExistentialQuantification #-}
+
+-- DSL for WebAssembly. Respresented using Prog to allow scoping structures
+-- such as if-else, loop, and block. Also uses Datatypes a la Carte to allow
+-- for language to be extended. This is important as WASM is in MVP and has
+-- new features scheduled.
+
+{-# LANGUAGE DeriveFunctor, TypeOperators #-}
 
 module Back.WASM
 ( LocalName
@@ -43,7 +46,7 @@ module Back.WASM
 
 import Data.Word (Word32)
 import Helper.Prog
-import Helper.Pretty
+import Helper.Co
 
 --------------------------------------------------------------------------------
 -- Syntax
@@ -70,31 +73,46 @@ data UniOp = NOT                   deriving Show
 data BinOp = ADD | SUB | MUL | AND deriving Show
 data RelOp = EQU | LEQ             deriving Show
 
--- WASM instructions without scope.
 data Instr k
     -- Do nothing.
     = NOP k
+    deriving Functor
+
+-- Arithmetic instructions.
+data ArithInstr k
     -- Push constant onto stack.
-    | CONST Integer k
+    = CONST Integer k
     -- Perform operation with items on top of stack.
     | BIN_OP BinOp k
     | REL_OP RelOp k
+    deriving Functor
+
+-- Instructions for getting/setting variables.
+data VarInstr k
     -- Push local variable onto stack.
-    | GET_LOCAL LocalName k
+    = GET_LOCAL LocalName k
     -- Pop stack and set local variable to popped value.
     | SET_LOCAL LocalName k
     -- Push global variable onto stack.
     | GET_GLOBAL GlobalName k
     -- Pop stack and set global variable to popped value.
     | SET_GLOBAL GlobalName k
+    deriving Functor
+
+-- Instructions for interacting with memory.
+data MemInstr k
     -- Pop value from stack to use as base address. Load value from base+offset
     -- and push to stack.
-    | LOAD MemOffset k
+    = LOAD MemOffset k
     -- Pop value from stack to use as base address. Pop another value to store.
     -- Store value at base+offset.
     | STORE MemOffset k
+    deriving Functor
+
+-- Instructions for changing control flow.
+data BranchInstr k
     -- Unconditional branch, the semantics of which depends on the branch location.
-    | BR Label k
+    = BR Label k
     -- Branch conditionally on popped value. If non-zero then take branch,
     -- otherwise continue execution flow.
     | BR_IF Label k
@@ -119,7 +137,8 @@ data Control k
     | LOOP k
     deriving Functor
 
-type WASM a = Prog Instr Control a
+type Op     = Instr :+: ArithInstr :+: VarInstr :+: MemInstr :+: BranchInstr
+type WASM a = Prog Op Control a
 
 data Func = Func {
     name    :: FuncName
@@ -156,55 +175,55 @@ data Module = Module {
 -- Smart constructors
 
 nop :: WASM ()
-nop = Op (NOP (Var ()))
+nop = inject (NOP (Var ()))
 
 constNum :: Integer -> WASM ()
-constNum i = Op (CONST i (Var ()))
+constNum i = inject (CONST i (Var ()))
 
 uniOp :: UniOp -> WASM ()
 uniOp NOT = do constNum 1; relOp EQU
 
 binOp :: BinOp -> WASM ()
-binOp op = Op (BIN_OP op (Var ()))
+binOp op = inject (BIN_OP op (Var ()))
 
 relOp :: RelOp -> WASM ()
-relOp op = Op (REL_OP op (Var ()))
+relOp op = inject (REL_OP op (Var ()))
 
 getLocal :: LocalName -> WASM ()
-getLocal name = Op (GET_LOCAL name (Var ()))
+getLocal name = inject (GET_LOCAL name (Var ()))
 
 setLocal :: LocalName -> WASM ()
-setLocal name = Op (SET_LOCAL name (Var ()))
+setLocal name = inject (SET_LOCAL name (Var ()))
 
 getGlobal :: GlobalName -> WASM ()
-getGlobal name = Op (GET_GLOBAL name (Var ()))
+getGlobal name = inject (GET_GLOBAL name (Var ()))
 
 setGlobal :: GlobalName -> WASM ()
-setGlobal name = Op (SET_GLOBAL name (Var ()))
+setGlobal name = inject (SET_GLOBAL name (Var ()))
 
 load :: MemOffset -> WASM ()
-load offset = Op (LOAD offset (Var ()))
+load offset = inject (LOAD offset (Var ()))
 
 store :: MemOffset -> WASM ()
-store offset = Op (STORE offset (Var ()))
+store offset = inject (STORE offset (Var ()))
 
 br :: Label -> WASM ()
-br label = Op (BR label (Var ()))
+br label = inject (BR label (Var ()))
 
 brIf :: Label -> WASM ()
-brIf label = Op (BR_IF label (Var ()))
+brIf label = inject (BR_IF label (Var ()))
 
 ret :: WASM ()
-ret = Op (RET (Var ()))
+ret = inject (RET (Var ()))
 
 call :: FuncName -> WASM ()
-call name = Op (CALL name (Var ()))
+call name = inject (CALL name (Var ()))
 
 block :: WASM () -> WASM ()
-block body = Scope (fmap (fmap return) (BLOCK body))
+block body = injectS (fmap (fmap return) (BLOCK body))
 
 ifElse :: WASM () -> WASM () -> WASM ()
-ifElse t e = Scope (fmap (fmap return) (IF t e))
+ifElse t e = injectS (fmap (fmap return) (IF t e))
 
 loop :: WASM () -> WASM ()
-loop body = Scope (fmap (fmap return) (LOOP body))
+loop body = injectS (fmap (fmap return) (LOOP body))
