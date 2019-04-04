@@ -1,6 +1,9 @@
--- Composite scoped effect handler to find variables which  are written
+
+-- Composite scoped effect handler to find variables which are written
 -- across different scopes. This affects whether variables need to be stored as
 -- values or pointers in outputted WASM.
+--
+-- WARNING: Makes assumption that all variables are unique.
 
 {-# LANGUAGE ViewPatterns, PatternSynonyms, TypeOperators, DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts, DataKinds, KindSignatures, GADTs #-}
@@ -8,8 +11,9 @@
 module Transform.Capture.DirtyEff
 ( Modified
 , ModScope
+, DirtyVars
 , modified
-, scope
+, modScope
 , handleDirtyVars
 ) where
 
@@ -86,17 +90,48 @@ data CarrierD' f g v a :: Nat -> * where
     CZ :: a -> CarrierD' f g v a 'Z
     CS :: (Hdl f g v (CarrierD' f g v a n)) -> CarrierD' f g v a ('S n)
 
+getLastScope :: (Functor f, Functor g) => Hdl f g v (LastScope v)
+getLastScope = get
+
+getScopeIdx :: (Functor f, Functor g) => Hdl f g v ScopeIdx
+getScopeIdx = get
+
+addDirtyVar :: (Functor f, Functor g, Ord v) => v -> Hdl f g v ()
+addDirtyVar = tell . Set.singleton
+
 genD :: (Functor f, Functor g) => a -> CarrierD f g v a 'Z
 genD x = D (return (CZ x))
 
 algD :: (Functor f, Functor g, Ord v) => Alg (Modified v :+: f) (ModScope :+: g) (CarrierD f g v a)
 algD = A a d p where
-    a ::  (Functor f, Functor g) => (Modified v :+: f) (CarrierD f g v a n) -> CarrierD f g v a n
-    a (Modified v k) = undefined
-    a (Other op) = undefined
+    a ::  (Functor f, Functor g, Ord v) => (Modified v :+: f) (CarrierD f g v a n) -> CarrierD f g v a n
+    a (Modified v k) = D $ do
+        lastScope <- getLastScope
+        case v `Map.lookup` lastScope of
+            -- Variable never seen before, therefore the scope the variable
+            -- was seen at is the current scope index.
+            Nothing    -> do
+                currIdx <- getScopeIdx
+                put (Map.insert v currIdx lastScope)
+                runD k
+
+            -- Variable has been seen before.
+            Just scIdx -> do
+                currIdx <- getScopeIdx
+                if scIdx == currIdx
+                    -- Variable modified in same scope, therefore no action required.
+                    then runD k
+                    -- Variable modified in a different scope, therefore, update
+                    -- set of dirty variables.
+                    else do
+                        addDirtyVar v
+                        runD k
+
+    a (Other op) = D (Op (fmap runD (R $ R $ R $ R op)))
 
     d ::  (Functor f, Functor g) => (ModScope :+: g) (CarrierD f g v a ('S n)) -> CarrierD f g v a n
     d (ModScope k) = undefined
+    
     d (Other op) = undefined
 
     p ::  (Functor f, Functor g) => CarrierD f g v a n -> CarrierD f g v a ('S n)
