@@ -3,8 +3,9 @@
 
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 {-# LANGUAGE TypeOperators, DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 
-module Front.Pretty
+module Transform.Pretty
 ( pretty
 ) where
 
@@ -86,9 +87,27 @@ docProcDecl (f, (Id body)) = do
 type While v p
     = Prog (VarExp v :+: AExp :+: BExp :+: VarStm v :+: ProcStm p :+: Stm) (ScopeStm :+: BlockStm v p) ()
 
+evalId' :: (OpAlg f DocCarrier, ScopeAlg g DocCarrier) => (r -> DocCarrier 'Z) -> Prog f g r -> Doc ()
+evalId' gen = runId gen alg' where
+    alg' = A alg dem pro
+    pro :: CarrierId (Doc ()) n -> CarrierId (Doc ()) ('S n)
+    pro (Id x) = Id (do text " ... "; x)
+
 docAST :: (Pretty v, Pretty p) => While v p -> Doc ()
-docAST = evalId gen where
+docAST = evalId' gen where
     gen x = Id (return x)
 
 instance (Pretty v, Pretty p) => Show (While v p) where
     show = toString 0 . docAST
+
+
+-- TODO: Remove example
+
+test :: While Ident Ident
+test = do
+    while true (setVar "v" (num 1))
+    export (num 2)
+
+runTest :: IO ()
+runTest = do
+    putStrLn (show test)
