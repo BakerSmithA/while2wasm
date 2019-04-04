@@ -61,5 +61,6 @@ algF = A a d p where
 mkState :: (Functor f, Functor g) => Prog (Fresh :+: f) g a -> Prog (State Word :+: f) (LocalSt Word :+: g) a
 mkState = runId (Id . return) algF
 
-handleFresh :: (Functor f, Functor g) => Prog (Fresh :+: f) g a -> Prog f g (a, Word)
-handleFresh = handleState 0 . mkState
+-- Takes initial fresh value, this will be returned the first time `fresh` is called.
+handleFresh :: (Functor f, Functor g) => Word -> Prog (Fresh :+: f) g a -> Prog f g (a, Word)
+handleFresh n = handleState n . mkState

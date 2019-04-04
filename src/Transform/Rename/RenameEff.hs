@@ -174,5 +174,5 @@ handleRename prog = do
     -- The fresh is global, indicated by wrapping around the state. Therefore,
     -- getting a new fresh inside scoped state still gives a globally fresh
     -- value.
-    ((x, st), fresh) <- (handleFresh . handleState emptyNames . mkHdl) prog
+    ((x, st), fresh) <- (handleFresh 0 . handleState emptyNames . mkHdl) prog
     return x

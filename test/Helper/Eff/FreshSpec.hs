@@ -12,7 +12,7 @@ import Helper.Eff.Void
 type P = Prog (Fresh :+: Void) Void
 
 runP :: P a -> (a, Word)
-runP = handleVoid . handleFresh
+runP = handleVoid . handleFresh 0
 
 freshSpec :: Spec
 freshSpec = do

@@ -168,5 +168,5 @@ handleDirtyVars prog = do
     -- Therefore, we know fresh is global (i.e. wrapping states), and so is
     -- DirtyVars. This ensures local versions are not made inside any local
     -- state scopes.
-    ((((x, _), _), _), vs) <- (handleWriter . handleFresh . handleState 0 . handleState emptyLastScope . mkHdl) prog
+    ((((x, _), _), _), vs) <- (handleWriter . handleFresh 1 . handleState 0 . handleState emptyLastScope . mkHdl) prog
     return (x, vs)
