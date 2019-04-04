@@ -1,10 +1,11 @@
 
--- Investigation of methods used to map between representations of the AST.
--- In this method, the Datatypes a la Carte methods are used to create instances
--- of typeclasses which describe how to fold over the AST to create the new AST.
+-- Datatypes a la Carte methods are used to create instances of typeclasses
+-- which describe how to fold over the AST to create the new AST.
 --
 -- An advantage of this method is it is easy to add new mappings from syntax
--- by creating a new typeclass instance.
+-- by creating a new typeclass instance. Also, the domain being mapped to will
+-- not change, meaning there are no problems with needing to implement these
+-- typeclasses for slightly different domains.
 --
 -- A disadvantage is the mapping needs to be specified for every datatype
 -- that will be mapped over into the tree. Even if no renaming occurs, such as

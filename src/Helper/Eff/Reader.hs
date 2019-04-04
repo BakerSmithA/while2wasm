@@ -33,6 +33,7 @@ ask = inject (Ask' Var)
 -- Semantics
 --------------------------------------------------------------------------------
 
+-- No scoping, therefore can use CarrierId.
 type Carrier f g s a = CarrierId (s -> Prog f g a)
 
 genR :: (Functor f, Functor g) => a -> Carrier f g s a 'Z

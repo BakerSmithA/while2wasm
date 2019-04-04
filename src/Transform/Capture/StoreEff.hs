@@ -1,7 +1,7 @@
 
--- Composite scoped effect handler to modify variables to be local or foreign.
--- Implemented using as a composite effect to allow to be used with effect
--- handler which determines whether a variable is a pointer or value.
+-- Composite scoped effect handler to annotate variables with whether they are
+-- local or foreign to the current scope. This affects which functions variables
+-- belong to in outputted WASM.
 
 {-# LANGUAGE ViewPatterns, PatternSynonyms, TypeOperators, DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts, DataKinds, KindSignatures, GADTs #-}
@@ -54,15 +54,15 @@ data Discard k
     deriving Functor
 
 pattern StoreType v fk <- (prj -> Just (StoreType' v fk))
-storeType :: (Functor f, Functor g) => StoreType v :<: f => v -> Prog f g (Store v)
+storeType :: (Functor f, Functor g, StoreType v :<: f) => v -> Prog f g (Store v)
 storeType v = inject (StoreType' v Var)
 
 pattern Add vs k <- (prj -> Just (Add' vs k))
-addLocals :: (Functor f, Functor g) => Add v :<: g => [v] -> Prog f g a -> Prog f g a
+addLocals :: (Functor f, Functor g, Add v :<: g) => [v] -> Prog f g a -> Prog f g a
 addLocals vs inner = injectS (fmap (fmap return) (Add' vs inner))
 
 pattern Discard k <- (prj -> Just (Discard' k))
-discardLocals :: (Functor f, Functor g) => Discard :<: g => Prog f g a -> Prog f g a
+discardLocals :: (Functor f, Functor g, Discard :<: g) => Prog f g a -> Prog f g a
 discardLocals inner = injectS (fmap (fmap return) (Discard' inner))
 
 --------------------------------------------------------------------------------

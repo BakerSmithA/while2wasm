@@ -98,6 +98,7 @@ restoreNames old new = Map.union old new
 
 -- Describe renaming in terms of State and FreshName effect handlers.
 
+-- TODO: What is the effect of swapping State and Fresh handlers.
 type Hdl f g v a = Prog (State (Names v) :+: Fresh :+: f) (LocalSt (Names v) :+: g) a
 
 -- Need to use carriers using CZ and CS because the state needs to be updated
