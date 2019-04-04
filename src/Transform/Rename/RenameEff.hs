@@ -162,9 +162,7 @@ algRn = A a d p where
     p :: (Functor f, Functor g) => CarrierRn f g v a n -> CarrierRn f g v a ('S n)
     p (Rn runRn) = Rn (return (CS runRn))
 
-mkRename :: (Functor f, Functor g, Ord v)
-         => Prog (Rename v :+: f) (LocalName v :+: g) a
-         -> Prog (State (Names v) :+: Fresh :+: f) (LocalSt (Names v) :+: g) a
+mkRename :: (Functor f, Functor g, Ord v) => Prog (Rename v :+: f) (LocalName v :+: g) a -> Hdl f g v a
 mkRename prog = case run genRn algRn prog of
     (Rn prog') -> do
         (CZ x) <- prog'

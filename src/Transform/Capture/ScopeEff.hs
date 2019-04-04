@@ -78,9 +78,11 @@ type LastScope v = Map v ScopeIdx
 -- All dirty variables found.
 type DirtyVars v = Set v
 
--- Ordering ensures writer and fresh are global. However this is not strictly
--- necessary as the local scoping is not used.
-type Op  f v     = State   (LastScope v) :+: State   ScopeIdx :+: Tell (DirtyVars v) :+: Fresh :+: f
+emptyLastScope :: LastScope v
+emptyLastScope = Map.empty
+
+-- Ordering ensures writer and fresh are global.
+type Op  f v     = State   (LastScope v) :+: State   ScopeIdx :+: Fresh :+: Tell (DirtyVars v) :+: f
 type Sc  g v     = LocalSt (LastScope v) :+: LocalSt ScopeIdx :+: g
 type Hdl f g v a = Prog (Op f v) (Sc g v) a
 
@@ -90,3 +92,15 @@ data CarrierSc f g v a n
 data CarrierSc' f g v a :: Nat -> * where
     CZ :: a -> CarrierSc' f g v a 'Z
     CS :: (Hdl f g v (CarrierSc' f g v a n)) -> CarrierSc' f g v a ('S n)
+
+mkScope :: (Functor f, Functor g, Ord v) => Prog (Modified v :+: f) (Scope :+: f) a -> Hdl f g v a
+mkScope = undefined
+
+handleScope :: (Functor f, Functor g, Ord v) => Prog (Modified v :+: f) (Scope :+: f) a -> Prog f g (a, DirtyVars v)
+handleScope prog = do
+    -- Result has type ((((a, LastScope v), ScopeIdx), Word), DirtyVars v)
+    -- Therefore, we know fresh is global (i.e. wrapping scopes), and so is
+    -- DirtyVars. This ensures local versions are not made inside any local
+    -- scopes.
+    ((((x, _), _), _), vs) <- (handleWriter . handleFresh . handleState 0 . handleState emptyLastScope . mkScope) prog
+    return (x, vs)

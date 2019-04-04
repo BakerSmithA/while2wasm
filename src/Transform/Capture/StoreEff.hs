@@ -143,9 +143,7 @@ algSt = A a d p where
     p :: (Functor f, Functor g, Ord v) => CarrierSt f g v a n -> CarrierSt f g v a ('S n)
     p (St runSt) = St (return (CS runSt))
 
-mkStore :: (Functor f, Functor g, Ord v)
-        => Prog (StoreType v :+: f) (Add v :+: Discard :+: g) a
-        -> Prog (State (IsLocal v) :+: f) (LocalSt (IsLocal v) :+: g) a
+mkStore :: (Functor f, Functor g, Ord v) => Prog (StoreType v :+: f) (Add v :+: Discard :+: g) a -> Hdl f g v a
 mkStore prog = case run genSt algSt prog of
     (St prog') -> do
         (CZ x) <- prog'
