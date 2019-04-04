@@ -78,6 +78,9 @@ type DirtyVars v = Set v
 emptyLastScope :: LastScope v
 emptyLastScope = Map.empty
 
+-- TODO: Reader with scope may be more appropriate for State ScopeIdx as
+-- index only changed when entering scope, not with put.
+
 -- Ordering ensures writer and fresh are global.
 type Op  f v     = State   (LastScope v) :+: State   ScopeIdx :+: Fresh :+: Tell (DirtyVars v) :+: f
 type Sc  g v     = LocalSt (LastScope v) :+: LocalSt ScopeIdx :+: g
@@ -96,6 +99,9 @@ getLastScope = get
 getScopeIdx :: (Functor f, Functor g) => Hdl f g v ScopeIdx
 getScopeIdx = get
 
+freshScopeIdx :: (Functor f, Functor g) => Hdl f g v ScopeIdx
+freshScopeIdx = fresh
+
 addDirtyVar :: (Functor f, Functor g, Ord v) => v -> Hdl f g v ()
 addDirtyVar = tell . Set.singleton
 
@@ -105,6 +111,8 @@ genD x = D (return (CZ x))
 algD :: (Functor f, Functor g, Ord v) => Alg (Modified v :+: f) (ModScope :+: g) (CarrierD f g v a)
 algD = A a d p where
     a ::  (Functor f, Functor g, Ord v) => (Modified v :+: f) (CarrierD f g v a n) -> CarrierD f g v a n
+    -- Tells environment a variable was modified. If modified in two different
+    -- scopes then make a dirty variable.
     a (Modified v k) = D $ do
         lastScope <- getLastScope
         case v `Map.lookup` lastScope of
@@ -130,12 +138,23 @@ algD = A a d p where
     a (Other op) = D (Op (fmap runD (R $ R $ R $ R op)))
 
     d ::  (Functor f, Functor g) => (ModScope :+: g) (CarrierD f g v a ('S n)) -> CarrierD f g v a n
-    d (ModScope k) = undefined
-    
-    d (Other op) = undefined
+    -- Enters scope, in which if a variable is modified and modified in above
+    -- scope then the variable will be made dirty.
+    d (ModScope k) = D $ do
+        -- Does not change the scope index assigned to this scope, only the
+        -- next fresh scope index that will be used.
+        newScIdx <- freshScopeIdx
+        -- Run nested continuation with new scope index.
+        (CS run') <- local newScIdx (runD k)
+        -- Run rest of non-nested continuation.
+        run'
+
+    d (Other op) = D (Scope (fmap (\(D prog) -> fmap f prog) (R $ R op))) where
+        f :: (Functor f, Functor g) => CarrierD' f g v a ('S n) -> Hdl f g v (CarrierD' f g v a n)
+        f (CS prog) = prog
 
     p ::  (Functor f, Functor g) => CarrierD f g v a n -> CarrierD f g v a ('S n)
-    p = undefined
+    p (D runD) = D (return (CS runD))
 
 mkHdl :: (Functor f, Functor g, Ord v) => Prog (Modified v :+: f) (ModScope :+: g) a -> Hdl f g v a
 mkHdl prog = case run genD algD prog of
