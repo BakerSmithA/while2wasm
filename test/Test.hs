@@ -6,6 +6,7 @@ import Front.Parse.RecSpec
 import Helper.Eff.StateSpec
 import Helper.Eff.FreshSpec
 import Helper.Eff.ReaderSpec
+import Helper.Eff.WriterSpec
 import Transform.Rename.RenameEffSpec
 import Transform.Capture.StoreEffSpec
 import Transform.RenameSpec
@@ -20,4 +21,5 @@ main = hspec specs where
         readerSpec
         renameEffSpec
         renameSpec
+        writerSpec
         storeEffSpec
