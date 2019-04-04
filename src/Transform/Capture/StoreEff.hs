@@ -7,26 +7,35 @@
 {-# LANGUAGE FlexibleContexts, DataKinds, KindSignatures, GADTs #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
-module Transform.Capture.StoreEff where
+module Transform.Capture.StoreEff
+( Store(..)
+, StoreType
+, Add
+, Discard
+, storeType
+, addLocals
+, discardLocals
+, handleStore
+) where
 
-import Data.Map (Map)
-import qualified Data.Map as Map
+import qualified Data.Set as Set
 import Helper.Prog
 import Helper.Co
 import Helper.Eff.State
+import Helper.Eff
 
 data Store v
     -- Variable local to a level of scope.
     = Local v
     -- Variable used outside the scope it was declared.
     | Foreign v
-    deriving Eq
+    deriving (Eq, Show)
 
 --------------------------------------------------------------------------------
 -- Syntax
 --------------------------------------------------------------------------------
 
-data Type v k
+data StoreType v k
     -- Retrieves whether a variable is local or foreign to the current scope.
     = StoreType' v (Store v -> k)
     deriving Functor
@@ -45,33 +54,38 @@ data Discard k
     deriving Functor
 
 pattern StoreType v fk <- (prj -> Just (StoreType' v fk))
-storeType :: (Functor f, Functor g) => Type v :<: f => v -> Prog f g (Store v)
+storeType :: (Functor f, Functor g) => StoreType v :<: f => v -> Prog f g (Store v)
 storeType v = inject (StoreType' v Var)
 
 pattern Add vs k <- (prj -> Just (Add' vs k))
-added :: (Functor f, Functor g) => Add v :<: g => [v] -> Prog f g () -> Prog f g ()
-added vs inner = injectS (fmap (fmap return) (Add' vs inner))
+addLocals :: (Functor f, Functor g) => Add v :<: g => [v] -> Prog f g a -> Prog f g a
+addLocals vs inner = injectS (fmap (fmap return) (Add' vs inner))
 
 pattern Discard k <- (prj -> Just (Discard' k))
-discard :: (Functor f, Functor g) => Discard :<: g => Prog f g () -> Prog f g ()
-discard inner = injectS (fmap (fmap return) (Discard' inner))
+discardLocals :: (Functor f, Functor g) => Discard :<: g => Prog f g a -> Prog f g a
+discardLocals inner = injectS (fmap (fmap return) (Discard' inner))
 
 --------------------------------------------------------------------------------
 -- Semantics
 --------------------------------------------------------------------------------
 
-
 -- Whether a variable was declared at the current scope.
-type IsLocal  v = v -> Bool
--- Where a variable is stored corresponding to its name.
-type VarTypes v = Map v (Store v)
--- So it can be easily passed around.
-type Env v = (IsLocal v, VarTypes v)
+type IsLocal v = v -> Bool
 
-emptyTopEnv :: Env v
-emptyTopEnv = undefined
+-- Simple shallow DSL to describe which variables are local.
+allLocal :: IsLocal v
+allLocal = const True
 
-type Hdl f g v a = Prog (State (Env v) :+: f) (LocalSt (Env v) :+: g) a
+noneLocal :: IsLocal v
+noneLocal = const False
+
+isLocalFromList :: Ord v => [v] -> IsLocal v
+isLocalFromList vs v = v `Set.member` Set.fromList vs
+
+orLocal :: IsLocal v -> IsLocal v -> IsLocal v
+orLocal x y v = x v || y v
+
+type Hdl f g v a = Prog (State (IsLocal v) :+: f) (LocalSt (IsLocal v) :+: g) a
 
 data CarrierSt f g v a n
     = St { runSt :: Hdl f g v (CarrierSt' f g v a n) }
@@ -80,23 +94,66 @@ data CarrierSt' f g v a :: Nat -> * where
     CZ :: a -> CarrierSt' f g v a 'Z
     CS :: (Hdl f g v (CarrierSt' f g v a n)) -> CarrierSt' f g v a ('S n)
 
+isVLocal :: (Functor f, Functor g) => v -> Hdl f g v Bool
+isVLocal v = do
+    isLocal <- get
+    return (isLocal v)
+
+getIsLocal :: (Functor f, Functor g) => Hdl f g v (IsLocal v)
+getIsLocal = get
+
+noneLocal' :: (Functor f, Functor g) => Hdl f g v (IsLocal v)
+noneLocal' = return noneLocal
+
 genSt :: (Functor f, Functor g) => a -> CarrierSt f g v a 'Z
 genSt x = St (return (CZ x))
 
-algSt :: (Functor f, Functor g) => Alg (Type v :+: f) (Add v :+: Discard :+: g) (CarrierSt f g v a)
-algSt = undefined
+algSt :: (Functor f, Functor g, Ord v) => Alg (StoreType v :+: f) (Add v :+: Discard :+: g) (CarrierSt f g v a)
+algSt = A a d p where
+    a :: (Functor f, Functor g) => (StoreType v :+: f) (CarrierSt f g v a n) -> CarrierSt f g v a n
+    a (StoreType v fk) = St $ do
+        b <- isVLocal v
+        if b
+            then runSt (fk (Local v))
+            else runSt (fk (Foreign v))
+
+    a (Other op) = St (Op (fmap runSt (R op)))
+
+    d :: (Functor f, Functor g, Ord v) => (Add v :+: Discard :+: g) (CarrierSt f g v a ('S n)) -> CarrierSt f g v a n
+    d (Add vs k) = St $ do
+        isLocal <- getIsLocal
+        let vsIsLocal = isLocalFromList vs
+        -- Inside local block, both the original and new variables are local.
+        (CS run') <- local (isLocal `orLocal` vsIsLocal) (runSt k)
+        -- Original locals are restored by local state.
+        run'
+
+    d (Discard k) = St $ do
+        -- TODO: How to make this work outwith ugly-ness. Problem with types regarding v.
+        n <- noneLocal'
+        -- Run continuation with no local variables.
+        (CS run') <- local n (runSt k)
+        -- Original locals are restored by local state.
+        run'
+
+    d (Other (Other op)) = St (Scope (fmap (\(St prog) -> fmap f prog) (R op))) where
+        f :: (Functor f, Functor g) => CarrierSt' f g v a ('S n) -> Hdl f g v (CarrierSt' f g v a n)
+        f (CS prog) = prog
+
+    p :: (Functor f, Functor g, Ord v) => CarrierSt f g v a n -> CarrierSt f g v a ('S n)
+    p (St runSt) = St (return (CS runSt))
 
 mkStore :: (Functor f, Functor g, Ord v)
-        => Prog (Type v :+: f) (Add v :+: Discard :+: g) a
-        -> Prog (State (Env v) :+: f) (LocalSt (Env v) :+: g) a
+        => Prog (StoreType v :+: f) (Add v :+: Discard :+: g) a
+        -> Prog (State (IsLocal v) :+: f) (LocalSt (IsLocal v) :+: g) a
 mkStore prog = case run genSt algSt prog of
     (St prog') -> do
         (CZ x) <- prog'
         return x
 
 handleStore :: (Functor f, Functor g, Ord v)
-            => Prog (Type v :+: f) (Add v :+: Discard :+: g) a -> Prog f g a
+            => Prog (StoreType v :+: f) (Add v :+: Discard :+: g) a -> Prog f g a
 handleStore prog = do
     -- Discard resulting state.
-    (x, _) <- (handleState emptyTopEnv . mkStore) prog
+    (x, _) <- (handleState allLocal . mkStore) prog
     return x

@@ -96,9 +96,6 @@ insManyFresh vs = do mapM_ insFresh vs; get
 restoreNames :: Ord v => Names v -> Names v -> Names v
 restoreNames old new = Map.union old new
 
-getNames :: (Functor f, Functor g) => Prog (State (Names v) :+: f) (LocalSt (Names v) :+: g) (Names v)
-getNames = get
-
 -- Describe renaming in terms of State and FreshName effect handlers.
 
 type Hdl f g v a = Prog (State (Names v) :+: Fresh :+: f) (LocalSt (Names v) :+: g) a
@@ -111,6 +108,9 @@ data CarrierRn f g v a n
 data CarrierRn' f g v a :: Nat -> * where
     CZ :: a -> CarrierRn' f g v a 'Z
     CS :: (Hdl f g v (CarrierRn' f g v a n)) -> CarrierRn' f g v a ('S n)
+
+getNames :: (Functor f, Functor g) => Hdl f g v (Names v)
+getNames = get
 
 genRn :: (Functor f, Functor g) => a -> CarrierRn f g v a 'Z
 genRn x = Rn (return (CZ x))
