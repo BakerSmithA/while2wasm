@@ -14,6 +14,7 @@ module Helper.Pretty
 , empty
 , text
 , showable
+, line'
 , nl
 , sp
 , nonEmpty
@@ -59,6 +60,9 @@ text s = Op (Text s (Var ()))
 
 showable :: Show a => a -> Doc ()
 showable x = text (show x)
+
+line' :: Doc a -> Doc a
+line' doc = do x <- doc; nl; return x
 
 nl :: Doc ()
 nl = Op (Newline (Var ()))

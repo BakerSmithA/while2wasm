@@ -21,23 +21,23 @@ data Carrier' :: Nat -> * where
     CS :: Doc (Carrier'  n) -> Carrier' ('S n)
     -- Required because not all parts of AST have continuations. Therefore,
     -- they have nothing to produce a value of type Carrier' a n.
-    CN :: Doc () -> Carrier' n
+    CN :: Carrier' n
 
 instance Pretty Ident where
     pretty = text
 
 instance OpAlg (VarExp Ident) DocCarrier where
-    alg (GetVar v) = D (return $ CN (text v))
+    alg (GetVar v) = D $ do text v; return CN
 
 instance OpAlg AExp DocCarrier where
-    alg (Num n)           = D $ return $ CN (showable n)
+    alg (Num n)           = D $ do showable n; return CN
     alg (Add (D x) (D y)) = D $ parens (do x; text " + "; y)
     alg (Sub (D x) (D y)) = D $ parens (do x; text " - "; y)
     alg (Mul (D x) (D y)) = D $ parens (do x; text " * "; y)
 
 instance OpAlg BExp DocCarrier where
-    alg (T)               = D $ return $ CN (text "true")
-    alg (F)               = D $ return $ CN (text "false")
+    alg (T)               = D $ do text "true"; return CN
+    alg (F)               = D $ do text "false"; return CN
     alg (Equ (D x) (D y)) = D $ parens (do x; text " = ";  y)
     alg (LEq (D x) (D y)) = D $ parens (do x; text " <= "; y)
     alg (And (D x) (D y)) = D $ parens (do x; text " && "; y)
@@ -57,13 +57,13 @@ instance ScopeAlg ScopeStm DocCarrier where
     dem (If (D b) (D t) (D e))
         = D (do
             x <- parens (do
-                text "if "; b; text " then"; nl
-                x <- indented t
-                line "else"
-                indented e
-                case x of
-                    (CS doc) -> return doc
-                    (CN doc) -> doc >> return (return (CN empty)))
+                    text "if "; b; text " then"; nl
+                    x <- indented t
+                    line "else"
+                    indented e
+                    case x of
+                        (CS doc) -> return doc
+                        (CN)     -> return (return CN))
             nl
             x)
 
