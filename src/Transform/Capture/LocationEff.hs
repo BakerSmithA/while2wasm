@@ -49,7 +49,8 @@ data LocOp v k
 
 data Add v k
     -- Tells environment that variables inside continuation are local.
-    -- This does not change whether other variables are local or foreign.
+    -- Also modifies mapping from variables to location to make variables local
+    -- at current scope.
     = Add' [v] k
     deriving Functor
 
@@ -159,8 +160,14 @@ algL = A a d p where
     d (Add vs k) = Lc $ do
         isLocal <- getIsLocal
         let vsIsLocal = isLocalFromList vs
+
+        locations <- getAllVarLocs
+        let localVs = Map.fromList $ zip vs (repeat Local)
+            locations' = Map.union localVs locations
+
         -- Inside local block, both the original and new variables are local.
-        (CS run') <- localR (isLocal `orLocal` vsIsLocal) (runL k)
+        (CS run') <- localR (isLocal `orLocal` vsIsLocal) (do
+            localSt locations' (runL k))
         -- Original locals are restored by local reader.
         run'
     d (Discard k) = Lc $ do

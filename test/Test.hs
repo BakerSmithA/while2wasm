@@ -8,7 +8,7 @@ import Helper.Eff.FreshSpec
 import Helper.Eff.ReaderSpec
 import Helper.Eff.WriterSpec
 import Transform.Rename.RenameEffSpec
--- import Transform.Capture.StoreEffSpec
+import Transform.Capture.LocationEffSpec
 import Transform.Capture.DirtyEffSpec
 import Transform.RenameSpec
 
@@ -23,5 +23,5 @@ main = hspec specs where
         renameEffSpec
         renameSpec
         writerSpec
-        -- storeEffSpec
+        locationEffSpec
         dirtyEffSpec
