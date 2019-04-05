@@ -25,6 +25,7 @@ import Helper.Prog
 import Helper.Co
 import Helper.Eff
 import Helper.Eff.State
+import Helper.Eff.Reader
 import Helper.Eff.Fresh
 import Helper.Eff.Writer
 
@@ -78,12 +79,12 @@ type DirtyVars v = Set v
 emptyLastScope :: LastScope v
 emptyLastScope = Map.empty
 
--- TODO: Reader with scope may be more appropriate for State ScopeIdx as
--- index only changed when entering scope, not with put.
-
 -- Ordering ensures writer and fresh are global.
-type Op  f v     = State   (LastScope v) :+: State   ScopeIdx :+: Fresh :+: Tell (DirtyVars v) :+: f
-type Sc  g v     = LocalSt (LastScope v) :+: LocalSt ScopeIdx :+: g
+-- Only need a reader for keeping track of the current scope index, because
+-- the index only changes when entering scope, therefore this can be done
+-- using scope of reader.
+type Op  f v     = State   (LastScope v) :+: Ask    ScopeIdx :+: Fresh :+: Tell (DirtyVars v) :+: f
+type Sc  g v     = LocalSt (LastScope v) :+: LocalR ScopeIdx :+: g
 type Hdl f g v a = Prog (Op f v) (Sc g v) a
 
 data CarrierD f g v a n
@@ -97,7 +98,7 @@ getLastScope :: (Functor f, Functor g) => Hdl f g v (LastScope v)
 getLastScope = get
 
 getScopeIdx :: (Functor f, Functor g) => Hdl f g v ScopeIdx
-getScopeIdx = get
+getScopeIdx = ask
 
 freshScopeIdx :: (Functor f, Functor g) => Hdl f g v ScopeIdx
 freshScopeIdx = fresh
@@ -145,7 +146,7 @@ algD = A a d p where
         -- next fresh scope index that will be used.
         newScIdx <- freshScopeIdx
         -- Run nested continuation with new scope index.
-        (CS run') <- localSt newScIdx (runD k)
+        (CS run') <- localR newScIdx (runD k)
         -- Run rest of non-nested continuation.
         run'
 
@@ -164,10 +165,10 @@ mkHdl prog = case run genD algD prog of
 
 handleDirtyVars :: (Functor f, Functor g, Ord v) => Prog (Modified v :+: f) (ModScope :+: g) a -> Prog f g (a, DirtyVars v)
 handleDirtyVars prog = do
-    -- Result has type ((((a, LastScope v), ScopeIdx), Word), DirtyVars v)
+    -- Result has type (((a, LastScope v), Word), DirtyVars v)
     -- Therefore, we know fresh is global (i.e. wrapping states), and so is
     -- DirtyVars. This ensures local versions are not made inside any local
     -- state scopes.
     let srtScopeIdx = 0
-    ((((x, _), _), _), vs) <- (handleWriter . handleFresh (succ srtScopeIdx) . handleState srtScopeIdx . handleState emptyLastScope . mkHdl) prog
+    (((x, _), _), vs) <- (handleWriter . handleFresh (succ srtScopeIdx) . handleReader srtScopeIdx . handleState emptyLastScope . mkHdl) prog
     return (x, vs)
