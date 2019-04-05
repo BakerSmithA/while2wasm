@@ -14,7 +14,6 @@ module Helper.Eff.Reader
 import Helper.Prog
 import Helper.Co
 import Helper.Eff
-import Helper.Eff.Void
 
 --------------------------------------------------------------------------------
 -- Syntax
@@ -51,5 +50,5 @@ algR = A a d p where
     p :: (Functor f, Functor g) => Carrier f g s a n -> Carrier f g s a ('S n)
     p (Id p) = Id p
 
-handleReader :: (Functor f, Functor g) => Prog (Ask s :+: f) g a -> s -> Prog f g a
-handleReader = runId genR algR
+handleReader :: (Functor f, Functor g) => s -> Prog (Ask s :+: f) g a -> Prog f g a
+handleReader s prog = (runId genR algR prog) s

@@ -2,7 +2,6 @@
 
 module Helper.Eff.ReaderSpec where
 
-import Data.Word (Word)
 import Test.Hspec
 import Helper.Prog
 import Helper.Co
@@ -12,7 +11,7 @@ import Helper.Eff.Void
 type P = Prog (Ask String :+: Void) Void
 
 runP :: P a -> String -> a
-runP s = handleVoid . handleReader s
+runP p s = (handleVoid . handleReader s) p
 
 readerSpec :: Spec
 readerSpec = do
