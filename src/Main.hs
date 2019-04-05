@@ -6,7 +6,7 @@ import System.Environment
 import Text.Megaparsec (runParser, errorBundlePretty)
 import Front.Parse.Parser
 import Front.AST
-import Transform.Pretty
+import Front.Pretty
 import Transform.Rename
 import Helper.Prog
 import Helper.Co

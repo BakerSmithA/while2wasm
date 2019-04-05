@@ -5,7 +5,7 @@ module Transform.RenameSpec where
 import Test.Hspec
 import Front.AST
 import Front.Eq()
-import Transform.Pretty()
+import Front.Pretty()
 import Helper.Prog hiding (p)
 import Helper.Co
 import Transform.Rename

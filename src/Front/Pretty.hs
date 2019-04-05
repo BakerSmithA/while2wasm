@@ -5,7 +5,7 @@
 {-# LANGUAGE TypeOperators, DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Transform.Pretty
+module Front.Pretty
 ( pretty
 ) where
 

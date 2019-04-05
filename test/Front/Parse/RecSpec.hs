@@ -5,7 +5,7 @@ module Front.Parse.RecSpec where
 import Test.Hspec
 import Front.AST
 import Front.Eq()
-import Transform.Pretty()
+import Front.Pretty()
 import qualified Front.Parse.Rec as R
 import Helper.Prog
 import Helper.Co

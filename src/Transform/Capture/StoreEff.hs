@@ -2,6 +2,8 @@
 -- Composite scoped effect handler to annotate variables with whether they are
 -- local or foreign to the current scope. This affects which functions variables
 -- belong to in outputted WASM.
+--
+-- WARNING: Makes assumption that all variables are unique.
 
 {-# LANGUAGE ViewPatterns, PatternSynonyms, TypeOperators, DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts, DataKinds, KindSignatures, GADTs #-}
@@ -28,9 +30,11 @@ import Helper.Eff
 -- different points in the AST may be local or foreign. This is unlike whether
 -- a variable is dirty or clean, which is a global property of each variable.
 data Store v
-    -- Variable local to a level of scope.
+    -- Variable local to a level of scope, analagous to a variable decalared
+    -- inside a function.
     = Local v
-    -- Variable used outside the scope it was declared.
+    -- Variable used outside the scope it was declared, analagous to an argument
+    -- passed into a function.
     | Foreign v
     deriving (Eq, Show)
 
