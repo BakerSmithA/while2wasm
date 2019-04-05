@@ -1,7 +1,10 @@
 
 -- Composite scoped effect handler to annotate variables with whether they are
--- local or foreign to the current scope. This affects which functions variables
--- belong to in outputted WASM.
+-- local or foreign to the current scope. Within the same scope, all occurrences
+-- of the variable will be of the same type.
+--
+-- Whether a variable is local or foreign  affects which functions variables
+-- belong to in outputted WebAssembly.
 --
 -- WARNING: Makes assumption that all variables are unique.
 

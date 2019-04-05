@@ -44,7 +44,7 @@ data Emit k
 data Block k
     -- Create a new block of instructions that nested emits will append to.
     -- Once scope is exited, this block will be popped from the stack.
-    = CodeBlock k
+    = CodeBlock (Instr -> k)
     -- Create a new block of instructions that nested emits will append to.
     -- Once scope is exited, the instructions will be placed in a function.
     | Function FuncName [LocalName] DoesRet k
