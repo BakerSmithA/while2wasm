@@ -26,7 +26,7 @@ data Carrier' :: Nat -> * where
 instance Pretty Ident where
     pretty = text
 
-instance OpAlg (VarExp Ident) DocCarrier where
+instance Pretty v => OpAlg (VarExp v) DocCarrier where
     -- TODO: Investigate more
     -- Because GetVar has no continuation, CN is returned. This is an empty
     -- carrier which does not change the 'level' of nesting. `text v` is
@@ -35,7 +35,7 @@ instance OpAlg (VarExp Ident) DocCarrier where
     --
     -- CN is used as the continuation, but because GetVar has no continuation
     -- then CN is empty.
-    alg (GetVar v) = D $ do text v; return CN
+    alg (GetVar v) = D $ do pretty v; return CN
 
 instance OpAlg AExp DocCarrier where
     alg (Num n)           = D $ do showable n; return CN
@@ -123,17 +123,3 @@ docAST prog =
 
 instance (OpAlg f DocCarrier, ScopeAlg g DocCarrier) => Show (Prog f g ()) where
     show = toString 0 . docAST
-
--- TODO: Remove example
-
-type While v p
-    = Prog (VarExp v :+: AExp :+: BExp :+: VarStm v :+: ProcStm p :+: Stm) (ScopeStm :+: BlockStm v p) ()
-
-test :: While Ident Ident
-test = do
-    block [("x", num 1), ("y", add (num 1) (num 2))] [("p", skip)] (setVar "v" (num 1))
-    export (num 2)
-
-runTest :: IO ()
-runTest = do
-    putStrLn (show test)
