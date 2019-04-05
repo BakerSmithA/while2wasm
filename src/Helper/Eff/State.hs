@@ -10,7 +10,7 @@ module Helper.Eff.State
 , LocalSt
 , get
 , put
-, local
+, localSt
 , handleState
 ) where
 
@@ -33,7 +33,7 @@ data State s k
 data LocalSt s k
     -- Creates a block where state is local. State after the local block is
     -- restored to state before entering.
-    = Local' s k
+    = LocalSt' s k
     deriving Functor
 
 pattern Get fk <- (prj -> Just (Get' fk))
@@ -44,9 +44,9 @@ pattern Put s k <- (prj -> Just (Put' s k))
 put :: (Functor f, Functor g, State s :<: f) => s -> Prog f g ()
 put s = inject (Put' s (Var ()))
 
-pattern Local s k <- (prj -> Just (Local' s k))
-local :: (Functor f, Functor g, LocalSt s :<: g) => s -> Prog f g a -> Prog f g a
-local s inner = injectS (fmap (fmap return) (Local' s inner))
+pattern LocalSt s k <- (prj -> Just (LocalSt' s k))
+localSt :: (Functor f, Functor g, LocalSt s :<: g) => s -> Prog f g a -> Prog f g a
+localSt s inner = injectS (fmap (fmap return) (LocalSt' s inner))
 
 --------------------------------------------------------------------------------
 -- Semantics
@@ -70,7 +70,7 @@ algSt = A a d p where
     a (Other op) = St $ \s -> Op (fmap (\(St run) -> run s) op)
 
     d :: (Functor f, Functor g) => (LocalSt s :+: g) (Carrier f g s a ('S n)) -> Carrier f g s a n
-    d (Local s' k) = St $ \s -> do
+    d (LocalSt s' k) = St $ \s -> do
         -- Run nested continuation with inner-state.
         (CS run', s'') <- runSt k s'
         -- Run remaining continuation (after nested continuation) in original state.

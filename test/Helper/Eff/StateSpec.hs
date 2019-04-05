@@ -25,5 +25,5 @@ stateSpec = do
             runP p 1 `shouldBe` (2, 2)
 
         it "creates local state" $ do
-            let p = do r <- local (100 :: Int) get; return r :: P Int
+            let p = do r <- localSt (100 :: Int) get; return r :: P Int
             runP p 1 `shouldBe` (100, 1)

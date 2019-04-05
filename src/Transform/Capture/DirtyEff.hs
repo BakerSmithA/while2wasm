@@ -145,7 +145,7 @@ algD = A a d p where
         -- next fresh scope index that will be used.
         newScIdx <- freshScopeIdx
         -- Run nested continuation with new scope index.
-        (CS run') <- local newScIdx (runD k)
+        (CS run') <- localSt newScIdx (runD k)
         -- Run rest of non-nested continuation.
         run'
 

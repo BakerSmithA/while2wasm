@@ -127,7 +127,7 @@ algSt = A a d p where
         isLocal <- getIsLocal
         let vsIsLocal = isLocalFromList vs
         -- Inside local block, both the original and new variables are local.
-        (CS run') <- local (isLocal `orLocal` vsIsLocal) (runSt k)
+        (CS run') <- localSt (isLocal `orLocal` vsIsLocal) (runSt k)
         -- Original locals are restored by local state.
         run'
 
@@ -135,7 +135,7 @@ algSt = A a d p where
         -- TODO: How to make this work outwith ugly-ness. Problem with types regarding v.
         n <- noneLocal'
         -- Run continuation with no local variables.
-        (CS run') <- local n (runSt k)
+        (CS run') <- localSt n (runSt k)
         -- Original locals are restored by local state.
         run'
 

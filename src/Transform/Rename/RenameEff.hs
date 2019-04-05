@@ -146,7 +146,7 @@ algRn = A a d p where
         -- Run nested continuation with local state.
         -- run' is the continuation remaining after the local continuation.
         -- Before running this the state is restored.
-        (CS run', localEnv) <- local ins (do
+        (CS run', localEnv) <- localSt ins (do
             r <- runRn k
             e <- getNames
             return (r, e))
