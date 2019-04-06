@@ -32,9 +32,16 @@ type Op  = Rename    Ident :+: Void
 type Sc  = LocalName Ident :+: Void
 type Hdl = Prog Op Sc
 
+-- The renaming handler Hdl, should be a global scope around the While AST.
+-- Therefore making renaming consistent across different scopes. Therefore,
+-- Hdl wraps the AST.
 data Carrier f g a n
     = Rn { runRn :: Hdl (Prog f g (Carrier' f g a n)) }
 
+-- Also, because the renaming handler should be global, it is not given to
+-- CS when increasing the level of nesting. This ensures there are not renaming
+-- handlers nested inside other renaming handlers, and instead CZ and CS refer
+-- only to the levels of nesting of the AST.
 data Carrier' f g a :: Nat -> * where
     CZ :: a -> Carrier' f g a 'Z
     CS :: Prog f g (Carrier' f g a n) -> Carrier' f g a ('S n)
