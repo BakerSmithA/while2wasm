@@ -6,7 +6,13 @@
 {-# LANGUAGE ViewPatterns, PatternSynonyms #-}
 {-# LANGUAGE DataKinds, GADTs, KindSignatures #-}
 
-module Helper.Eff.Exception where
+module Helper.Eff.Exception
+( Throw
+, Catch
+, throw
+, catch
+, handleExc
+) where
 
 import Helper.Prog
 import Helper.Co

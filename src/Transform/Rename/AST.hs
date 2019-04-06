@@ -11,14 +11,11 @@
 -- that will be mapped over into the tree. Even if no renaming occurs, such as
 -- is the case for AExp.
 
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeOperators, DataKinds, KindSignatures, GADTs #-}
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, FlexibleContexts #-}
+{-# LANGUAGE Rank2Types #-}
 
-module Transform.Rename.AST
-( RenameHandler
-, Carrier
-, makeRn
-) where
+module Transform.Rename.AST where
 
 import Control.Monad (liftM2)
 import Front.AST
@@ -28,92 +25,116 @@ import Helper.Co
 import Helper.Eff.Void
 import Helper.Eff.Exception
 
--- To allow two different instance of Rename in the handler, use newtypes.
--- This allows procedures to be renamed separately from variables.
-newtype VarName  = VarName  Ident deriving (Eq, Ord)
-newtype ProcName = ProcName Ident deriving (Eq, Ord)
+-- TODO: Remove
+import Front.Pretty
 
-type Op                = Throw :+: Rename VarName    :+: Rename ProcName :+: Void
-type Sc                = Catch :+: LocalName VarName :+: LocalName ProcName :+: Void
-type RenameHandler f g = Prog Op Sc (Prog f g ())
-type Carrier       f g = CarrierId (RenameHandler f g)
+type Op  = Rename    Ident :+: Void
+type Sc  = LocalName Ident :+: Void
+type Hdl = Prog Op Sc
 
-binOp :: (Prog f g () -> Prog f g () -> Prog f g ()) -> Carrier f g n -> Carrier f g n -> Carrier f g n
-binOp f (Id x) (Id y) = Id (liftM2 f x y)
+data Carrier f g a n
+    = Rn { runRn :: Hdl (Prog f g (Carrier' f g a n)) }
 
-instance VarExp FreshName :<: f => OpAlg (VarExp Ident) (Carrier f g) where
-    alg (GetVar v) = Id $ do
-        v' <- name (VarName v)
+data Carrier' f g a :: Nat -> * where
+    CZ :: a -> Carrier' f g a 'Z
+    CS :: Prog f g (Carrier' f g a n) -> Carrier' f g a ('S n)
+
+instance VarExp FreshName :<: f => OpAlg (VarExp Ident) (Carrier f g a) where
+    alg (GetVar v) = Rn $ do
+        v' <- name v
         return (getVar v')
 
-instance AExp :<: f => OpAlg AExp (Carrier f g) where
-    alg (Num n)   = Id $ return (num n)
-    alg (Add x y) = binOp add x y
-    alg (Sub x y) = binOp sub x y
-    alg (Mul x y) = binOp mul x y
+instance (Functor f, Functor g, AExp :<: f) => OpAlg AExp (Carrier f g a) where
+    alg (Num n)             = Rn $ return (num n)
+    alg (Add (Rn x) (Rn y)) = Rn $ do
+        x' <- x
+        y' <- y
+        return (add x' y')
 
-instance BExp :<: f => OpAlg BExp (Carrier f g) where
-    alg (T)          = Id $ return true
-    alg (F)          = Id $ return false
-    alg (Equ x y)    = binOp equ x y
-    alg (LEq x y)    = binOp leq x y
-    alg (And x y)    = binOp andB x y
-    alg (Not (Id x)) = Id $ do x' <- x; return (notB x')
+instance BExp :<: f => OpAlg BExp (Carrier f g a) where
+    alg (T) = Rn $ return true
 
-instance (VarStm FreshName :<: f, Functor g) => OpAlg (VarStm Ident) (Carrier f g) where
-    alg (SetVar v (Id x) (Id k)) = Id $ do
-        v' <- name (VarName v)
+instance (Functor f, Functor g, VarStm FreshName :<: f) => OpAlg (VarStm Ident) (Carrier f g a) where
+    alg (SetVar v (Rn x) (Rn k)) = Rn $ do
+        v' <- name v
         x' <- x
         k' <- k
         return (do setVar v' x'; k')
 
-instance (ProcStm FreshName :<: f, Functor g) => OpAlg (ProcStm Ident) (Carrier f g) where
-    alg (Call p (Id k)) = Id $ do
-        -- If a procedure has not been declared before calling, then throw an error.
-        exists <- exists (ProcName p)
-        if exists
-            then do
-                p' <- name (ProcName p)
-                k' <- k
-                return (do call p'; k')
-            else
-                throw "No procedure declared"
+instance OpAlg (ProcStm Ident) (Carrier f g a) where
+    alg = undefined
 
-instance (Stm :<: f, Functor g) => OpAlg Stm (Carrier f g) where
-    alg (Skip (Id k)) = Id $ do
+instance (Functor f, Functor g, Stm :<: f) => OpAlg Stm (Carrier f g a) where
+    alg (Skip (Rn k)) = Rn $ do
         k' <- k
         return (do skip; k')
 
-    alg (Export (Id x) (Id k)) = Id $ do
-        x' <- x
-        k' <- k
-        return (do export x'; k')
-
-instance (Functor f, ScopeStm :<: g) => ScopeAlg ScopeStm (Carrier f g) where
-    dem (If (Id b) (Id t) (Id e)) = Id $ do
-        b' <- b
-        t' <- t
-        e' <- e
-        return (ifElse b' t' e')
-
-    dem (While (Id b) (Id s)) = Id $ do
+instance (Functor f, Functor g, ScopeStm :<: g) => ScopeAlg ScopeStm (Carrier f g a) where
+    dem (While (Rn b) (Rn s)) = Rn $ do
         b' <- b
         s' <- s
-        return (while b' s')
+        return (do
+            (CS k) <- while b' s'
+            k)
 
-instance (Functor f, BlockStm FreshName FreshName :<: g) => ScopeAlg (BlockStm Ident Ident) (Carrier f g) where
-    dem (Block vs ps (Id s)) = Id $ do
-        localNames (map VarName (fsts vs)) (do
-            localNames (map ProcName (fsts ps)) (do
-                vs' <- map2M (name . VarName) unId vs
-                ps' <- map2M (name . ProcName) unId ps
-                s'  <- s
-                return (block vs' ps' s')))
+instance ScopeAlg (BlockStm Ident Ident) (Carrier f g a) where
+    dem = undefined
 
--- Use Datatypes a la Carte to convert AST to handler, the types in the AST
--- are not the same before and after, indicated by the change from Prog f g to Prog h i.
+makeRn' :: (Functor h, Functor i)
+     => (OpAlg f (Carrier h i a), ScopeAlg g (Carrier h i a))
+     => Prog f g a -> Carrier h i a 'Z
+makeRn' = eval gen pro where
+    gen :: (Functor h, Functor i) => a -> Carrier h i a 'Z
+    gen x = Rn (return (return (CZ x)))
+
+    pro ::  (Functor h, Functor i) => Carrier h i a n -> Carrier h i a ('S n)
+    pro (Rn x) = Rn $ do
+        x' <- x
+        return (return (CS x'))
+
 makeRn :: (Functor h, Functor i)
-     => (OpAlg f (Carrier h i), ScopeAlg g (Carrier h i))
-     => Prog f g () -> RenameHandler h i
-makeRn = evalId gen where
-    gen x = Id (return (return x))
+     => (OpAlg f (Carrier h i a), ScopeAlg g (Carrier h i a))
+     => Prog f g a -> Hdl (Prog h i a)
+makeRn prog = case makeRn' prog of
+    (Rn x) -> fmap (fmap (\(CZ x) -> x)) x where
+
+handle :: Hdl (Prog h i a) -> Prog h i a
+handle = handleVoid . handleRename
+
+rename :: (Functor h, Functor i)
+       => (OpAlg f (Carrier h i a), ScopeAlg g (Carrier h i a))
+       => Prog f g a -> Prog h i a
+rename = handle . makeRn
+
+--------------------------------------------------------------------------------
+-- Examples
+--------------------------------------------------------------------------------
+
+-- TODO: Remove
+
+type WOp    v p = VarExp v :+: AExp :+: BExp :+: VarStm v :+: ProcStm p :+: Stm
+type WScope v p = ScopeStm :+: BlockStm v p
+type While  v p = Prog (WOp v p) (WScope v p) ()
+type IWhile     = While Ident Ident
+type FWhile     = While FreshName Ident
+
+test :: IWhile
+test = do
+    setVar "x" (num 1)
+    setVar "y" (num 2)
+    setVar "x" (add (getVar "x") (getVar "y"))
+
+testSc :: IWhile
+testSc = do
+    while true (do
+        setVar "x" (num 1))
+    setVar "y" (num 2)
+    setVar "x" (num 2)
+
+runTest :: IWhile -> IO ()
+runTest ast = do
+    let ast' = rename ast :: FWhile
+    putStrLn "-- Before --"
+    putStrLn (show ast)
+    putStrLn "-- After --"
+    putStrLn (show ast')

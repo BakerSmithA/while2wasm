@@ -120,8 +120,10 @@ notB x = inject (Not x)
 
 -- IVarStm
 
-setVar :: VarStm v :<: f => v -> Prog f g () -> Prog f g ()
-setVar v x = inject (SetVar v x (Var ()))
+-- Discard the value produced by `x`. This makes it easier to write functions
+-- which use `setVar`, such as in Transform.Rename.AST
+setVar :: (Functor f, Functor g) => VarStm v :<: f => v -> Prog f g a -> Prog f g ()
+setVar v x = inject (SetVar v (x >> return ()) (Var ()))
 
 -- IProcStm
 
@@ -138,10 +140,10 @@ export x = inject (Export x (Var ()))
 
 -- ScopeStm
 
-ifElse :: (Functor f, ScopeStm :<: g) => Prog f g () -> Prog f g () -> Prog f g () -> Prog f g ()
+ifElse :: (Functor f, ScopeStm :<: g) => Prog f g a -> Prog f g a -> Prog f g a -> Prog f g a
 ifElse b t e = injectS (fmap (fmap return) (If b t e))
 
-while :: (Functor f, ScopeStm :<: g) => Prog f g () -> Prog f g () -> Prog f g ()
+while :: (Functor f, ScopeStm :<: g) => Prog f g a -> Prog f g a -> Prog f g a
 while b s = injectS (fmap (fmap return) (While b s))
 
 -- IIBlockStm
