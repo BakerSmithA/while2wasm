@@ -135,8 +135,8 @@ call func = inject (Call func (Var ()))
 skip :: Stm :<: f => Prog f g ()
 skip = inject (Skip (Var ()))
 
-export :: Stm :<: f => Prog f g () -> Prog f g ()
-export x = inject (Export x (Var ()))
+export :: (Functor f, Functor g, Stm :<: f) => Prog f g a -> Prog f g ()
+export x = inject (Export (x >> return ()) (Var ()))
 
 -- ScopeStm
 
@@ -148,5 +148,5 @@ while b s = injectS (fmap (fmap return) (While b s))
 
 -- IIBlockStm
 
-block :: (Functor f, BlockStm v p :<: g) => [(v, Prog f g ())] -> [(p, Prog f g ())] -> Prog f g () -> Prog f g ()
+block :: (Functor f, BlockStm v p :<: g) => [(v, Prog f g a)] -> [(p, Prog f g a)] -> Prog f g a -> Prog f g a
 block vs ps b = injectS (fmap (fmap return) (Block vs ps b))
