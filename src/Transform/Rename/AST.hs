@@ -44,7 +44,8 @@ data Carrier f g a n
 -- only to the levels of nesting of the AST.
 data Carrier' f g a :: Nat -> * where
     CZ :: a -> Carrier' f g a 'Z
-    CS :: Prog f g (Carrier' f g a n) -> Carrier' f g a ('S n)
+    CS :: Hdl (Prog f g (Carrier' f g a n)) -> Carrier' f g a ('S n)
+    -- CN :: Prog f g (Carrier' f g a n) -> Carrier' f g a
 
 binOp :: (forall b . Prog f g b -> Prog f g b -> Prog f g b) -> Carrier f g a n -> Carrier f g a n -> Carrier f g a n
 binOp f (Rn x) (Rn y) = Rn (liftM2 f x y)
@@ -90,13 +91,19 @@ instance (Functor f, Functor g, Stm :<: f) => OpAlg Stm (Carrier f g a) where
         return (do export x'; k')
 
 instance (Functor f, Functor g, ScopeStm :<: g) => ScopeAlg ScopeStm (Carrier f g a) where
-    dem (If (Rn b) (Rn t) (Rn e)) = Rn $ do
-        b' <- b; t' <- t; e' <- e
-        return (do (CS k) <- ifElse b' t' e'; k)
+    dem = undefined
+    -- dem (If (Rn b) (Rn t) (Rn e)) = Rn $ do
+    --     b' <- b; t' <- t; e' <- e
+    --     return (do (CS k) <- ifElse b' t' e'; k)
+    --
+    -- dem (While (Rn b) (Rn s)) = Rn $ do
+    --     b' <- b; s' <- s
+    --     return (do (CS k) <- while b' s'; k)
 
-    dem (While (Rn b) (Rn s)) = Rn $ do
-        b' <- b; s' <- s
-        return (do (CS k) <- while b' s'; k)
+j :: Prog f g (Carrier' f g a ('S n)) -> Hdl (Prog f g (Carrier' f g a n))
+j prog = do
+    (CS k) <- prog
+    k
 
 instance (Functor f, Functor g, BlockStm FreshName Ident :<: g)
     => ScopeAlg (BlockStm Ident Ident) (Carrier f g a) where
@@ -105,11 +112,24 @@ instance (Functor f, Functor g, BlockStm FreshName Ident :<: g)
         -- TODO
         -- Continuation needs to occur outside `localNames` so names in
         -- continuation are not given incorrect names.
-        localNames (fsts vs) (do
-            vs' <- mapM fv vs
-            ps' <- mapM fp ps
-            body' <- body
-            return (do (CS k) <- block vs' ps' body'; k)))
+
+        -- Want to return something that is of type (Hdl ...) contanining k
+        -- So renaming continuation occurs after localNames
+
+        rnBody <- body
+        k <- j rnBody
+
+
+        undefined)
+
+        -- x <- localNames (fsts vs) (do
+        --     vs' <- mapM fv vs
+        --     ps' <- mapM fp ps
+        --     body' <- body
+        --     _)
+        --     --return (do (CS k) <- block vs' ps' body'; k)))
+        --
+        -- undefined)
 
 fv :: (Ident, Carrier f g a ('S n)) -> Prog Op Sc (FreshName, Prog f g (Carrier' f g a ('S n)))
 fv (v, Rn x) = do
@@ -130,9 +150,10 @@ makeRn' = eval gen pro where
     gen x = Rn (return (return (CZ x)))
 
     pro ::  (Functor h, Functor i) => Carrier h i a n -> Carrier h i a ('S n)
-    pro (Rn x) = Rn $ do
-        x' <- x
-        return (return (CS x'))
+    pro = undefined
+    -- pro (Rn x) = Rn $ do
+    --     x' <- x
+    --     return (return (CS x'))
 
 makeRn :: (Functor h, Functor i)
      => (OpAlg f (Carrier h i a), ScopeAlg g (Carrier h i a))
@@ -177,7 +198,7 @@ testBlock :: IWhile
 testBlock = do
     setVar "x" (num 0)
     block [("x", num 1)] [("p", setVar "y" (num 2))] skip
-    setVar "x" (num 10)
+    setVar "x" (num 3)
 
 runTest :: IWhile -> IO ()
 runTest ast = do
