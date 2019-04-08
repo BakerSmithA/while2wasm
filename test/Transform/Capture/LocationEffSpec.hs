@@ -35,7 +35,7 @@ locationEffSpec = do
             runPTop p `shouldBe` Map.fromList [("y", Local)]
 
         it "discards local variables" $ do
-            let p   = do seen "x"; ls <- discard (seen "y"); return ls :: P (Map String Location)
+            let p   = do seen "x"; discard (seen "y") :: P (Map String Location)
                 top = Map.fromList [("x", Local)]
                 inn = Map.fromList [("y", Foreign)]
             runP p `shouldBe` (inn, top)
@@ -44,10 +44,16 @@ locationEffSpec = do
             let p = discard (addLocals ["x"] (return ())) :: P (Map String Location)
             runPInner p `shouldBe` Map.fromList [("x", Local)]
 
-        it "adding local variables accumulates outer" $ do
+        it "adding local variables accumulates" $ do
             let p = discard (addLocals ["x"] (addLocals ["y"] (return ()))) :: P (Map String Location)
+            runPInner p `shouldBe` Map.fromList [("x", Local), ("y", Local)]
+
+        it "does not make local variables foreign if seen" $ do
+            let p = discard (addLocals ["x"] (seen "x")) :: P (Map String Location)
             runPInner p `shouldBe` Map.fromList [("x", Local)]
 
-        it "adding local variables accumulates inner" $ do
-            let p = discard (addLocals ["x"] (addLocals ["y"] (return ()))) :: P (Map String Location)
-            runPInner p `shouldBe` Map.fromList [("y", Local)]
+        it "discard makes any added local variables foreign" $ do
+            let p = discardLocals (addLocals ["x"] (discard (seen "x"))) :: P (Map String Location, Map String Location)
+                top = Map.fromList [("x", Local)]
+                inn = Map.fromList [("x", Foreign)]
+            fst (runP p) `shouldBe` (inn, top)

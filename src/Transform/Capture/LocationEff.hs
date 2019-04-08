@@ -26,6 +26,7 @@ import Helper.Co
 import Helper.Eff.Reader
 import Helper.Eff.State
 import Helper.Eff
+import Debug.Trace
 
 data Location
     -- Variable local to a level of scope, analagous to a variable decalared
@@ -143,7 +144,7 @@ emptyLocs = return Map.empty
 genL :: (Functor f, Functor g) => a -> Carrier f g v a 'Z
 genL x = Lc (return (CZ x))
 
-algL :: (Functor f, Functor g, Ord v) => Alg (LocOp v :+: f) (Add v :+: Discard :+: g) (Carrier f g v a)
+algL :: (Functor f, Functor g, Ord v, Show v) => Alg (LocOp v :+: f) (Add v :+: Discard :+: g) (Carrier f g v a)
 algL = A a d p where
     a :: (Functor f, Functor g, Ord v) => (LocOp v :+: f) (Carrier f g v a n) -> Carrier f g v a n
     a (Seen v k) = Lc $ do
@@ -156,20 +157,23 @@ algL = A a d p where
         runL (fk locs)
     a (Other op) = Lc (Op (fmap runL (R $ R op)))
 
-    d :: (Functor f, Functor g, Ord v) => (Add v :+: Discard :+: g) (Carrier f g v a ('S n)) -> Carrier f g v a n
+    d :: (Functor f, Functor g, Ord v, Show v) => (Add v :+: Discard :+: g) (Carrier f g v a ('S n)) -> Carrier f g v a n
     d (Add vs k) = Lc $ do
         isLocal <- getIsLocal
         let vsIsLocal = isLocalFromList vs
 
+        -- Add all variables supplied to `Add` as local variables of the
+        -- current scope.
         locations <- getAllVarLocs
         let localVs = Map.fromList $ zip vs (repeat Local)
             locations' = Map.union localVs locations
+        putAllVarLocs locations'
 
         -- Inside local block, both the original and new variables are local.
-        (CS run') <- localR (isLocal `orLocal` vsIsLocal) (do
-            localSt locations' (runL k))
+        (CS run') <- localR (isLocal `orLocal` vsIsLocal) (do runL k)
         -- Original locals are restored by local reader.
         run'
+
     d (Discard k) = Lc $ do
         -- TODO: How to make this work outwith ugly-ness. Problem with types regarding v.
         n <- noneLocal'
@@ -188,12 +192,12 @@ algL = A a d p where
     p :: (Functor f, Functor g, Ord v) => Carrier f g v a n -> Carrier f g v a ('S n)
     p (Lc runL) = Lc (return (CS runL))
 
-mkLoc :: (Functor f, Functor g, Ord v) => Prog (LocOp v :+: f) (Add v :+: Discard :+: g) a -> Hdl f g v a
+mkLoc :: (Functor f, Functor g, Ord v, Show v) => Prog (LocOp v :+: f) (Add v :+: Discard :+: g) a -> Hdl f g v a
 mkLoc prog = case run genL algL prog of
     (Lc prog') -> do
         (CZ x) <- prog'
         return x
 
 -- Returns result and mapping from variable names to locations at the top level scope.
-handleLoc :: (Functor f, Functor g, Ord v) => Prog (LocOp v :+: f) (Add v :+: Discard :+: g) a -> Prog f g (a, Map v Location)
+handleLoc :: (Functor f, Functor g, Ord v, Show v) => Prog (LocOp v :+: f) (Add v :+: Discard :+: g) a -> Prog f g (a, Map v Location)
 handleLoc = handleState Map.empty . handleReader allLocal . mkLoc

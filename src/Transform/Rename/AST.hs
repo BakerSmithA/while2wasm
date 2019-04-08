@@ -38,53 +38,6 @@ type Hdl = Prog Op Sc
 data Carrier f g a n
     = Rn { runRn :: Hdl (Prog f g (Carrier' f g a n)) }
 
--- WARNING: Problem:
---  Want to turn AST into renamed AST. To rename, can use Hdl above as a monad
---  context to run renaming in. Hdl provides methods such as localNames,
---  and name for renaming.
---
---  Problem comes from nesting Hdl (Prog f g (Carrier ...))
---  which is different from other carriers used, which have form
---  Prog f g (Carrier ...), i.e. without added context.
---
---  CS below, does not take Hdl as this is a global context, and nesting
---  it does not make much sense (it also leads to other problems, discussed later).
---
---  Since CS does contain a Hdl context, nwrapping of the nesting, i.e. (CS k),
---  must be done inside the `Prog f g` context. However, this is the wrong
---  context as it means the continuation cannot be placed outside of any
---  local scope created by Hdl, e.g.
---
---      dem (Block vs ps (Rn body)) = Rn (do
---          (vs', ps', b') <- localNames (fsts vs) (do
---              vs' <- mapM fv vs
---              ps' <- mapM fp ps
---              body' <- body
---              return (vs', ps', body'))
---
---          return (do (CS k) <- block vs' ps' b'; k))
---
---  This incorrectly renames the continuation k to have the local name,
---  instead of names restored to before the localNames.
---
--- -----------
---
--- The thinking then goes to adding Hdl to CS, i.e.
---      CS :: Hdl (Prog f g (Carrier' f g a n)) -> Carrier' f g a ('S n)
---
--- This would allow the continuation to be 'run' outside the Prog context
--- and after the localNames block, thereby giving it the correct names.
--- However, it is not possible to obtain the Carrier' (i.e. CS) from
--- inside the Prog, without running it inside the prog. Therefore, resulting in
--- the same problem.
-
-
-
-
--- Also, because the renaming handler should be global, it is not given to
--- CS when increasing the level of nesting. This ensures there are not renaming
--- handlers nested inside other renaming handlers, and instead CZ and CS refer
--- only to the levels of nesting of the AST.
 data Carrier' f g a :: Nat -> * where
     CZ :: a -> Carrier' f g a 'Z
     CS :: Prog f g (Carrier' f g a n) -> Carrier' f g a ('S n)
@@ -133,58 +86,70 @@ instance (Functor f, Functor g, Stm :<: f) => OpAlg Stm (Carrier f g a) where
         return (do export x'; k')
 
 instance (Functor f, Functor g, ScopeStm :<: g) => ScopeAlg ScopeStm (Carrier f g a) where
-    dem (If (Rn b) (Rn t) (Rn e)) = Rn $ do
-        b' <- b; t' <- t; e' <- e
-        return (do (CS k) <- ifElse b' t' e'; k)
-
     dem (While (Rn b) (Rn s)) = Rn $ do
-        b' <- b; s' <- s
-        return (do (CS k) <- while b' s'; k)
+        rnB <- b
+        rnS <- s
+        return (do
+            (CS k) <- rnS
+            undefined)
+
+    -- dem (If (Rn b) (Rn t) (Rn e)) = Rn $ do
+    --     b' <- b; t' <- t; e' <- e
+    --     return (do (CS k) <- ifElse b' t' e'; k)
+    --
+    -- dem (While (Rn b) (Rn s)) = Rn $ do
+    --     b' <- b; s' <- s
+    --     return (do (CS k) <- while b' s'; k)
 
 instance (Functor f, Functor g, BlockStm FreshName Ident :<: g)
     => ScopeAlg (BlockStm Ident Ident) (Carrier f g a) where
 
-    dem (Block vs ps (Rn body)) = Rn (do
-        -- TODO
-        -- Continuation needs to occur outside `localNames` so names in
-        -- continuation are not given incorrect names.
+    dem = undefined
 
-        (vs', ps', b') <- localNames (fsts vs) (do
-            vs' <- mapM fv vs
-            ps' <- mapM fp ps
-            body' <- body
-            return (vs', ps', body'))
+    -- dem (Block vs ps (Rn body)) = Rn (do
+    --     -- TODO
+    --     -- Continuation needs to occur outside `localNames` so names in
+    --     -- continuation are not given incorrect names.
+    --
+    --     (vs', ps', b') <- localNames (fsts vs) (do
+    --         vs' <- mapM fv vs
+    --         ps' <- mapM fp ps
+    --         body' <- body
+    --         return (vs', ps', body'))
+    --
+    --     return (do (CS k) <- block vs' ps' b'; k))
 
-        return (do (CS k) <- block vs' ps' b'; k))
-
-fv :: (Ident, Carrier f g a ('S n)) -> Prog Op Sc (FreshName, Prog f g (Carrier' f g a ('S n)))
-fv (v, Rn x) = do
-    v' <- name v
-    x' <- x
-    return (v', x')
-
-fp :: (Ident, Carrier f g a ('S n)) -> Prog Op Sc (Ident, Prog f g (Carrier' f g a ('S n)))
-fp (pname, Rn body) = do
-    body' <- body
-    return (pname, body')
+-- fv :: (Ident, Carrier f g a ('S n)) -> Prog Op Sc (FreshName, Prog f g (Carrier' f g a ('S n)))
+-- fv (v, Rn x) = do
+--     v' <- name v
+--     x' <- x
+--     return (v', x')
+--
+-- fp :: (Ident, Carrier f g a ('S n)) -> Prog Op Sc (Ident, Prog f g (Carrier' f g a ('S n)))
+-- fp (pname, Rn body) = do
+--     body' <- body
+--     return (pname, body')
 
 makeRn' :: (Functor h, Functor i)
      => (OpAlg f (Carrier h i a), ScopeAlg g (Carrier h i a))
      => Prog f g a -> Carrier h i a 'Z
 makeRn' = eval gen pro where
     gen :: (Functor h, Functor i) => a -> Carrier h i a 'Z
-    gen x = Rn (return (return (CZ x)))
+    gen x = undefined --Rn (return (return (CZ x)))
 
     pro ::  (Functor h, Functor i) => Carrier h i a n -> Carrier h i a ('S n)
-    pro (Rn x) = Rn $ do
-        x' <- x
-        return (return (CS x'))
+    pro = undefined
+    -- pro (Rn x) = Rn $ do
+    --     x' <- x
+    --     return (return (CS x'))
 
 makeRn :: (Functor h, Functor i)
      => (OpAlg f (Carrier h i a), ScopeAlg g (Carrier h i a))
      => Prog f g a -> Hdl (Prog h i a)
-makeRn prog = case makeRn' prog of
-    (Rn x) -> fmap (fmap (\(CZ x) -> x)) x where
+makeRn = undefined
+
+-- makeRn prog = case makeRn' prog of
+--     (Rn x) -> fmap (fmap (\(CZ x) -> x)) x where
 
 handle :: Hdl (Prog h i a) -> Prog h i a
 handle = handleVoid . handleRename

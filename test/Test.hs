@@ -10,7 +10,7 @@ import Helper.Eff.WriterSpec
 import Transform.Rename.RenameEffSpec
 import Transform.Capture.LocationEffSpec
 import Transform.Capture.DirtyEffSpec
-import Transform.RenameSpec
+-- import Transform.RenameSpec
 
 main :: IO ()
 main = hspec specs where
@@ -21,7 +21,7 @@ main = hspec specs where
         freshSpec
         readerSpec
         renameEffSpec
-        renameSpec
+        -- renameSpec
         writerSpec
         locationEffSpec
         dirtyEffSpec
