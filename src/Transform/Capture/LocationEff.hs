@@ -13,6 +13,7 @@ module Transform.Capture.LocationEff
 , Add
 , Discard
 , seen
+, getLocations
 , addLocals
 , discardLocals
 , handleLoc
@@ -75,14 +76,8 @@ addLocals :: (Functor f, Functor g, Add v :<: g) => [v] -> Prog f g a -> Prog f 
 addLocals vs inner = injectS (fmap (fmap return) (Add' vs inner))
 
 pattern Discard k <- (prj -> Just (Discard' k))
--- Returns the result of the scoped continuation, as well as the mapping
--- from variables to their location inside the scope.
-discardLocals :: (Functor f, Functor g, Discard :<: g, LocOp v :<: f) => Prog f g a -> Prog f g (a, Map v Location)
-discardLocals inner = injectS (fmap (fmap return) (Discard' f)) where
-    f = do
-        x  <- inner
-        ls <- getLocations
-        return (x, ls)
+discardLocals :: (Functor f, Functor g, Discard :<: g) => Prog f g a -> Prog f g a
+discardLocals inner = injectS (fmap (fmap return) (Discard' inner))
 
 --------------------------------------------------------------------------------
 -- Semantics
@@ -199,5 +194,5 @@ mkLoc prog = case run genL algL prog of
         return x
 
 -- Returns result and mapping from variable names to locations at the top level scope.
-handleLoc :: (Functor f, Functor g, Ord v, Show v) => Prog (LocOp v :+: f) (Add v :+: Discard :+: g) a -> Prog f g (a, Map v Location)
-handleLoc = handleState Map.empty . handleReader allLocal . mkLoc
+handleLoc :: (Functor f, Functor g, Ord v, Show v) => Prog (LocOp v :+: f) (Add v :+: Discard :+: g) a -> Prog f g a
+handleLoc = fmap fst . handleState Map.empty . handleReader allLocal . mkLoc
