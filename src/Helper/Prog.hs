@@ -5,6 +5,8 @@
 {-# LANGUAGE DeriveFunctor, ExistentialQuantification #-}
 {-# LANGUAGE DataKinds, Rank2Types, KindSignatures, GADTs #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Helper.Prog
 ( Prog(..)
@@ -32,6 +34,12 @@ data Prog f g a
     | Scope (g (Prog f g (Prog f g a)))
     deriving Functor
 
+instance (Show a, Show b, Show (f (Prog f g a)), Show (g (Prog f g b)))
+    => Show (Prog f g a) where
+
+        show (Var x) = show x
+        show (Op op) = show op
+        show (Scope sc) = show sc
 
 instance (Functor f, Functor g) => Applicative (Prog f g) where
     pure  = Var

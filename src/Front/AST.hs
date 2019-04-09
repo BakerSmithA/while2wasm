@@ -15,14 +15,14 @@ type Ident = String
 -- represented as strings.
 data VarExp v k
     = GetVar v
-    deriving Functor
+    deriving (Functor, Show)
 
 data AExp k
     = Num Integer
     | Add k k
     | Sub k k
     | Mul k k
-    deriving Functor
+    deriving (Functor, Show)
 
 data BExp k
     = T
@@ -31,7 +31,7 @@ data BExp k
     | LEq k k
     | And k k
     | Not k
-    deriving Functor
+    deriving (Functor, Show)
 
 type VarDecls  v k = [(v, k)]
 type ProcDecls v k = [(v, k)]
@@ -51,31 +51,31 @@ map2M f g = mapM $ \(x, y) -> do
 -- Statements involving variables, where variable names are represented as strings.
 data VarStm v k
     = SetVar v k k
-    deriving Functor
+    deriving (Functor, Show)
 
 -- Statements regarding procedures, where procedure names are represented
 -- as strings.
 data ProcStm p k
     = Call p k
-    deriving Functor
+    deriving (Functor, Show)
 
 -- Instructions with continuations.
 data Stm k
     = Skip k
     | Export k k -- Export a variable to calling JS.
-    deriving Functor
+    deriving (Functor, Show)
 
 -- Syntax which contains other syntax.
 data ScopeStm k
     = If k k k
     | While k k
-    deriving Functor
+    deriving (Functor, Show)
 
 -- Block with local variable and procedure declarations, where the names of
 -- variables and procedures are represented as strings.
 data BlockStm v p k
     = Block (VarDecls v k) (ProcDecls p k) k
-    deriving Functor
+    deriving (Functor, Show)
 
 -- Smart Constructors
 

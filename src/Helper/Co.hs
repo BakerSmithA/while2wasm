@@ -19,6 +19,7 @@ infixr 5 :+:
 data (f :+: g) e
     = L (f e)
     | R (g e)
+    deriving (Show)
 
 instance (Functor f, Functor g) => Functor (f :+: g) where
     fmap f (L x) = L (fmap f x)

@@ -85,25 +85,25 @@ emptyLastScope = Map.empty
 -- using scope of reader.
 type Op  f v     = State   (LastScope v) :+: Ask    ScopeIdx :+: Fresh :+: Tell (DirtyVars v) :+: f
 type Sc  g v     = LocalSt (LastScope v) :+: LocalR ScopeIdx :+: g
-type Hdl f g v a = Prog (Op f v) (Sc g v) a
+type Ctx f g v a = Prog (Op f v) (Sc g v) a
 
 data CarrierD f g v a n
-    = D { runD :: Hdl f g v (CarrierD' f g v a n) }
+    = D { runD :: Ctx f g v (CarrierD' f g v a n) }
 
 data CarrierD' f g v a :: Nat -> * where
     CZ :: a -> CarrierD' f g v a 'Z
-    CS :: (Hdl f g v (CarrierD' f g v a n)) -> CarrierD' f g v a ('S n)
+    CS :: (Ctx f g v (CarrierD' f g v a n)) -> CarrierD' f g v a ('S n)
 
-getLastScope :: (Functor f, Functor g) => Hdl f g v (LastScope v)
+getLastScope :: (Functor f, Functor g) => Ctx f g v (LastScope v)
 getLastScope = get
 
-getScopeIdx :: (Functor f, Functor g) => Hdl f g v ScopeIdx
+getScopeIdx :: (Functor f, Functor g) => Ctx f g v ScopeIdx
 getScopeIdx = ask
 
-freshScopeIdx :: (Functor f, Functor g) => Hdl f g v ScopeIdx
+freshScopeIdx :: (Functor f, Functor g) => Ctx f g v ScopeIdx
 freshScopeIdx = fresh
 
-addDirtyVar :: (Functor f, Functor g, Ord v) => v -> Hdl f g v ()
+addDirtyVar :: (Functor f, Functor g, Ord v) => v -> Ctx f g v ()
 addDirtyVar = tell . Set.singleton
 
 genD :: (Functor f, Functor g) => a -> CarrierD f g v a 'Z
@@ -151,14 +151,14 @@ algD = A a d p where
         run'
 
     d (Other op) = D (Scope (fmap (\(D prog) -> fmap f prog) (R $ R op))) where
-        f :: (Functor f, Functor g) => CarrierD' f g v a ('S n) -> Hdl f g v (CarrierD' f g v a n)
+        f :: (Functor f, Functor g) => CarrierD' f g v a ('S n) -> Ctx f g v (CarrierD' f g v a n)
         f (CS prog) = prog
 
     p ::  (Functor f, Functor g) => CarrierD f g v a n -> CarrierD f g v a ('S n)
     p (D runD) = D (return (CS runD))
 
-mkHdl :: (Functor f, Functor g, Ord v) => Prog (Modified v :+: f) (ModScope :+: g) a -> Hdl f g v a
-mkHdl prog = case run genD algD prog of
+mkCtx :: (Functor f, Functor g, Ord v) => Prog (Modified v :+: f) (ModScope :+: g) a -> Ctx f g v a
+mkCtx prog = case run genD algD prog of
     (D prog') -> do
         (CZ x) <- prog'
         return x
@@ -170,5 +170,5 @@ handleDirtyVars prog = do
     -- DirtyVars. This ensures local versions are not made inside any local
     -- state scopes.
     let srtScopeIdx = 0
-    (((x, _), _), vs) <- (handleWriter . handleFresh (succ srtScopeIdx) . handleReader srtScopeIdx . handleState emptyLastScope . mkHdl) prog
+    (((x, _), _), vs) <- (handleWriter . handleFresh (succ srtScopeIdx) . handleReader srtScopeIdx . handleState emptyLastScope . mkCtx) prog
     return (x, vs)

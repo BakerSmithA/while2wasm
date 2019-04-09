@@ -13,8 +13,10 @@ module Transform.Rename.RenameEff
 , LocalName
 , name
 , exists
+, names
 , localNames
 , handleRename
+, Names
 ) where
 
 import Control.Monad (mapM_)
@@ -44,6 +46,7 @@ data Rename v k
     = Name' v (FreshName -> k)
     -- Returns whether a mapping exists.
     | Exists' v (Bool -> k)
+    | Names' (Names v -> k)
     deriving Functor
 
 data LocalName v k
@@ -65,8 +68,12 @@ exists :: (Functor f, Functor g) => Rename v :<: f => v -> Prog f g Bool
 exists p = inject (Exists' p Var)
 
 pattern Local vs k <- (prj -> Just (Local' vs k))
-localNames :: (Functor f, Functor g) => LocalName v :<: g => [v] -> Prog f g a -> Prog f g a
+localNames :: (Functor f, Functor g, LocalName v :<: g) => [v] -> Prog f g a -> Prog f g a
 localNames vs inner = injectS (fmap (fmap return) (Local' vs inner))
+
+pattern Names fk <- (prj -> Just (Names' fk))
+names :: (Functor f, Functor g, Rename v :<: f) => Prog f g (Names v)
+names = inject (Names' Var)
 
 --------------------------------------------------------------------------------
 -- Semantics
@@ -101,18 +108,18 @@ restoreNames old new = Map.union old new
 -- This ordering of effect handlers ensures the fresh is global, and so
 -- even inside local scope of a state, globally fresh values will be produced.
 -- Also see `handleRename` function.
-type Hdl f g v a = Prog (State (Names v) :+: Fresh :+: f) (LocalSt (Names v) :+: g) a
+type Ctx f g v a = Prog (State (Names v) :+: Fresh :+: f) (LocalSt (Names v) :+: g) a
 
 -- Need to use carriers using CZ and CS because the state needs to be updated
 -- after running local continuation, before running remaining continuation.
 data CarrierRn f g v a n
-    = Rn { runRn :: Hdl f g v (CarrierRn' f g v a n) }
+    = Rn { runRn :: Ctx f g v (CarrierRn' f g v a n) }
 
 data CarrierRn' f g v a :: Nat -> * where
     CZ :: a -> CarrierRn' f g v a 'Z
-    CS :: (Hdl f g v (CarrierRn' f g v a n)) -> CarrierRn' f g v a ('S n)
+    CS :: (Ctx f g v (CarrierRn' f g v a n)) -> CarrierRn' f g v a ('S n)
 
-getNames :: (Functor f, Functor g) => Hdl f g v (Names v)
+getNames :: (Functor f, Functor g) => Ctx f g v (Names v)
 getNames = get
 
 genRn :: (Functor f, Functor g) => a -> CarrierRn f g v a 'Z
@@ -136,6 +143,10 @@ algRn = A a d p where
         let exists = v `Map.member` env
         runRn (fk exists)
 
+    a (Names fk) = Rn $ do
+        env <- getNames
+        runRn (fk env)
+
     a (Other op) = Rn (Op (fmap runRn (R (R op))))
 
     d :: (Functor f, Functor g, Ord v) => (LocalName v :+: g) (CarrierRn f g  v a ('S n)) -> CarrierRn f g v a n
@@ -156,14 +167,14 @@ algRn = A a d p where
         run'
 
     d (Other op) = Rn (Scope (fmap (\(Rn prog) -> fmap f prog) (R op))) where
-        f :: (Functor f, Functor g) => CarrierRn' f g v a ('S n) -> Hdl f g v (CarrierRn' f g v a n)
+        f :: (Functor f, Functor g) => CarrierRn' f g v a ('S n) -> Ctx f g v (CarrierRn' f g v a n)
         f (CS prog) = prog
 
     p :: (Functor f, Functor g) => CarrierRn f g v a n -> CarrierRn f g v a ('S n)
     p (Rn runRn) = Rn (return (CS runRn))
 
-mkHdl :: (Functor f, Functor g, Ord v) => Prog (Rename v :+: f) (LocalName v :+: g) a -> Hdl f g v a
-mkHdl prog = case run genRn algRn prog of
+mkCtx :: (Functor f, Functor g, Ord v) => Prog (Rename v :+: f) (LocalName v :+: g) a -> Ctx f g v a
+mkCtx prog = case run genRn algRn prog of
     (Rn prog') -> do
         (CZ x) <- prog'
         return x
@@ -174,5 +185,5 @@ handleRename prog = do
     -- The fresh is global, indicated by wrapping around the state. Therefore,
     -- getting a new fresh inside scoped state still gives a globally fresh
     -- value.
-    ((x, st), fresh) <- (handleFresh 0 . handleState emptyNames . mkHdl) prog
+    ((x, st), fresh) <- (handleFresh 0 . handleState emptyNames . mkCtx) prog
     return x

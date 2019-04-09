@@ -100,14 +100,14 @@ orLocal x y v = x v || y v
 
 type Op  f v     = Ask    (IsLocal v) :+: State   (Locations v) :+: f
 type Sc  g v     = LocalR (IsLocal v) :+: LocalSt (Locations v) :+: g
-type Hdl f g v a = Prog (Op f v) (Sc g v) a
+type Ctx f g v a = Prog (Op f v) (Sc g v) a
 
 data Carrier f g v a n
-    = Lc { runL :: Hdl f g v (Carrier' f g v a n) }
+    = Lc { runL :: Ctx f g v (Carrier' f g v a n) }
 
 data Carrier' f g v a :: Nat -> * where
     CZ :: a -> Carrier' f g v a 'Z
-    CS :: (Hdl f g v (Carrier' f g v a n)) -> Carrier' f g v a ('S n)
+    CS :: (Ctx f g v (Carrier' f g v a n)) -> Carrier' f g v a ('S n)
 
 askIsLocal :: (Functor f, Functor g, Ask (IsLocal v) :<: f) => Prog f g (IsLocal v)
 askIsLocal = ask
@@ -118,30 +118,30 @@ getLocMappings = get
 putLocMappings :: (Functor f, Functor g, State (Locations v) :<: f) => Locations v -> Prog f g ()
 putLocMappings = put
 
--- getCurrVarLoc :: (Functor f, Functor g) => v -> Hdl f g v Location
+-- getCurrVarLoc :: (Functor f, Functor g) => v -> Ctx f g v Location
 -- getCurrVarLoc v = do
 --     isLocal <- ask
 --     return $ if isLocal v then Local else Foreign
 --
--- getAllVarLocs :: (Functor f, Functor g) => Hdl f g v (Map v Location)
+-- getAllVarLocs :: (Functor f, Functor g) => Ctx f g v (Map v Location)
 -- getAllVarLocs = get
 --
--- putAllVarLocs :: (Functor f, Functor g) => Map v Location -> Hdl f g v ()
+-- putAllVarLocs :: (Functor f, Functor g) => Map v Location -> Ctx f g v ()
 -- putAllVarLocs = put
 --
--- updateVarLoc :: (Functor f, Functor g, Ord v) => v -> Location -> Hdl f g v ()
+-- updateVarLoc :: (Functor f, Functor g, Ord v) => v -> Location -> Ctx f g v ()
 -- updateVarLoc v loc = do
 --     locs <- getAllVarLocs
 --     putAllVarLocs (Map.insert v loc locs)
 --
--- getIsLocal :: (Functor f, Functor g) => Hdl f g v (IsLocal v)
+-- getIsLocal :: (Functor f, Functor g) => Ctx f g v (IsLocal v)
 -- getIsLocal = ask
 --
 -- -- TODO: How to remove these?
--- noneLocal' :: (Functor f, Functor g) => Hdl f g v (IsLocal v)
+-- noneLocal' :: (Functor f, Functor g) => Ctx f g v (IsLocal v)
 -- noneLocal' = return noneLocal
 --
--- emptyLocs :: (Functor f, Functor g) => Hdl f g v (Map v Location)
+-- emptyLocs :: (Functor f, Functor g) => Ctx f g v (Map v Location)
 -- emptyLocs = return Map.empty
 --
 -- genL :: (Functor f, Functor g) => a -> Carrier f g v a 'Z
@@ -189,7 +189,7 @@ putLocMappings = put
 --         -- Original locals and mapping is restored through scoping.
 --         run'
 --     d (Other (Other op)) = Lc (Scope (fmap (\(Lc prog) -> fmap f prog) (R $ R op))) where
---         f :: (Functor f, Functor g) => Carrier' f g v a ('S n) -> Hdl f g v (Carrier' f g v a n)
+--         f :: (Functor f, Functor g) => Carrier' f g v a ('S n) -> Ctx f g v (Carrier' f g v a n)
 --         f (CS prog) = prog
 --
 --     p :: (Functor f, Functor g, Ord v) => Carrier f g v a n -> Carrier f g v a ('S n)
@@ -219,13 +219,13 @@ algL = A a d p where
     -- d (Add vs k) = undefined
     -- d (Discard k) = undefined
     -- d (Other (Other op)) = Lc (Scope (fmap (\(Lc prog) -> fmap f prog) (R $ R op))) where
-    --     f :: (Functor f, Functor g) => Carrier' f g v a ('S n) -> Hdl f g v (Carrier' f g v a n)
+    --     f :: (Functor f, Functor g) => Carrier' f g v a ('S n) -> Ctx f g v (Carrier' f g v a n)
     --     f (CS prog) = prog
 
     p :: (Functor f, Functor g, Ord v) => Carrier f g v a n -> Carrier f g v a ('S n)
     p (Lc runL) = Lc (return (CS runL))
 
-mkLoc :: (Functor f, Functor g, Ord v) => Prog (LocOp v :+: f) (Add v :+: Discard :+: g) a -> Hdl f g v a
+mkLoc :: (Functor f, Functor g, Ord v) => Prog (LocOp v :+: f) (Add v :+: Discard :+: g) a -> Ctx f g v a
 mkLoc prog = case run genL algL prog of
     (Lc prog') -> do
         (CZ x) <- prog'

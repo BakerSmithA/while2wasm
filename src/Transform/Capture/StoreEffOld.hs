@@ -95,24 +95,24 @@ isLocalFromList vs v = v `Set.member` Set.fromList vs
 orLocal :: IsLocal v -> IsLocal v -> IsLocal v
 orLocal x y v = x v || y v
 
-type Hdl f g v a = Prog (State (IsLocal v) :+: f) (LocalSt (IsLocal v) :+: g) a
+type Ctx f g v a = Prog (State (IsLocal v) :+: f) (LocalSt (IsLocal v) :+: g) a
 
 data CarrierSt f g v a n
-    = St { runSt :: Hdl f g v (CarrierSt' f g v a n) }
+    = St { runSt :: Ctx f g v (CarrierSt' f g v a n) }
 
 data CarrierSt' f g v a :: Nat -> * where
     CZ :: a -> CarrierSt' f g v a 'Z
-    CS :: (Hdl f g v (CarrierSt' f g v a n)) -> CarrierSt' f g v a ('S n)
+    CS :: (Ctx f g v (CarrierSt' f g v a n)) -> CarrierSt' f g v a ('S n)
 
-isVLocal :: (Functor f, Functor g) => v -> Hdl f g v Bool
+isVLocal :: (Functor f, Functor g) => v -> Ctx f g v Bool
 isVLocal v = do
     isLocal <- get
     return (isLocal v)
 
-getIsLocal :: (Functor f, Functor g) => Hdl f g v (IsLocal v)
+getIsLocal :: (Functor f, Functor g) => Ctx f g v (IsLocal v)
 getIsLocal = get
 
-noneLocal' :: (Functor f, Functor g) => Hdl f g v (IsLocal v)
+noneLocal' :: (Functor f, Functor g) => Ctx f g v (IsLocal v)
 noneLocal' = return noneLocal
 
 genSt :: (Functor f, Functor g) => a -> CarrierSt f g v a 'Z
@@ -147,13 +147,13 @@ algSt = A a d p where
         run'
 
     d (Other (Other op)) = St (Scope (fmap (\(St prog) -> fmap f prog) (R op))) where
-        f :: (Functor f, Functor g) => CarrierSt' f g v a ('S n) -> Hdl f g v (CarrierSt' f g v a n)
+        f :: (Functor f, Functor g) => CarrierSt' f g v a ('S n) -> Ctx f g v (CarrierSt' f g v a n)
         f (CS prog) = prog
 
     p :: (Functor f, Functor g, Ord v) => CarrierSt f g v a n -> CarrierSt f g v a ('S n)
     p (St runSt) = St (return (CS runSt))
 
-mkStore :: (Functor f, Functor g, Ord v) => Prog (StoreType v :+: f) (Add v :+: Discard :+: g) a -> Hdl f g v a
+mkStore :: (Functor f, Functor g, Ord v) => Prog (StoreType v :+: f) (Add v :+: Discard :+: g) a -> Ctx f g v a
 mkStore prog = case run genSt algSt prog of
     (St prog') -> do
         (CZ x) <- prog'
