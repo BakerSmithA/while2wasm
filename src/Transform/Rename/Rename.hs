@@ -48,14 +48,8 @@ instance ProcStm FreshName :<: f => FreeAlg (ProcStm Ident) (Ctx (Free f a)) whe
     alg = undefined
 
 instance Stm :<: f => FreeAlg Stm (Ctx (Free f a)) where
-    alg (While cond body) = do
-        rnCond <- cond
-        rnBody <- body
-        return (while rnCond rnBody)
-    alg (Comp s1 s2) = do
-        rnS1 <- s1
-        rnS2 <- s2
-        return (comp rnS1 rnS2)
+    alg (While cond body) = while <$> cond <*> body
+    alg (Comp s1 s2)      = comp <$> s1 <*> s2
 
 instance BlockStm FreshName FreshName :<: f => FreeAlg (BlockStm Ident Ident) (Ctx (Free f a)) where
     alg = undefined
