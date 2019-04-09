@@ -15,14 +15,14 @@ type Ident = String
 -- represented as strings.
 data VarExp v k
     = GetVar v
-    deriving (Functor, Show)
+    deriving (Functor, Eq, Show)
 
 data AExp k
     = Num Integer
     | Add k k
     | Sub k k
     | Mul k k
-    deriving (Functor, Show)
+    deriving (Functor, Eq, Show)
 
 data BExp k
     = T
@@ -31,7 +31,7 @@ data BExp k
     | LEq k k
     | And k k
     | Not k
-    deriving (Functor, Show)
+    deriving (Functor, Eq, Show)
 
 type VarDecls  v k = [(v, k)]
 type ProcDecls v k = [(v, k)]
@@ -53,13 +53,13 @@ map2M f g = mapM $ \(x, y) -> do
 -- Instead, Comp is used to compose statements
 data VarStm v k
     = SetVar v k
-    deriving (Functor, Show)
+    deriving (Functor, Eq, Show)
 
 -- Statements regarding procedures, where procedure names are represented
 -- as strings.
 data ProcStm p k
     = Call p
-    deriving (Functor, Show)
+    deriving (Functor, Eq, Show)
 
 data Stm k
     = Skip
@@ -67,13 +67,13 @@ data Stm k
     | If k k k
     | While k k
     | Comp k k
-    deriving (Functor, Show)
+    deriving (Functor, Eq, Show)
 
 -- Block with local variable and procedure declarations, where the names of
 -- variables and procedures are represented as strings.
 data BlockStm v p k
     = Block (VarDecls v k) (ProcDecls p k) k
-    deriving (Functor, Show)
+    deriving (Functor, Eq, Show)
 
 type While v p = Free (VarExp v :+: AExp :+: BExp :+: VarStm v :+: ProcStm p :+: Stm :+: BlockStm v p) ()
 

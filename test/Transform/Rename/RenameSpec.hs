@@ -1,47 +1,42 @@
 {-# LANGUAGE TypeOperators, FlexibleContexts #-}
 
-module Transform.RenameSpec where
+module Transform.Rename.RenameSpec where
 
 import Test.Hspec
 import Front.AST
-import Front.Eq()
-import Front.Pretty()
-import Helper.Scope.Prog hiding (p)
+import Helper.Free.Free
 import Helper.Co
-import Transform.Rename
+import Transform.Rename.Rename
 
-type Op    v p = VarExp v :+: AExp :+: BExp :+: VarStm v :+: ProcStm p :+: Stm
-type Scope v p = ScopeStm :+: BlockStm v p
-type While v p = Prog (Op v p) (Scope v p) ()
 type IWhile    = While Ident Ident
 type FWhile    = While FreshName FreshName
 
-getIVar :: VarExp Ident :<: f => Ident -> Prog f g a
+getIVar :: VarExp Ident :<: f => Ident -> Free f a
 getIVar = getVar
 
-getFVar :: VarExp FreshName :<: f => FreshName -> Prog f g a
+getFVar :: VarExp FreshName :<: f => FreshName -> Free f a
 getFVar = getVar
 
-setIVar :: VarStm Ident :<: f => Ident -> Prog f g () -> Prog f g ()
+setIVar :: VarStm Ident :<: f => Ident -> Free f () -> Free f ()
 setIVar = setVar
 
-setFVar :: VarStm FreshName :<: f => FreshName -> Prog f g () -> Prog f g ()
+setFVar :: VarStm FreshName :<: f => FreshName -> Free f () -> Free f ()
 setFVar = setVar
 
-callI :: ProcStm Ident :<: f => Ident -> Prog f g ()
+callI :: ProcStm Ident :<: f => Ident -> Free f ()
 callI = call
 
-callF :: ProcStm FreshName :<: f => FreshName -> Prog f g ()
+callF :: ProcStm FreshName :<: f => FreshName -> Free f ()
 callF = call
 
-blockI :: (Functor f, BlockStm Ident Ident :<: g)
-       => [(Ident, Prog f g ())] -> [(Ident, Prog f g ())]
-       -> Prog f g () -> Prog f g ()
+blockI :: (BlockStm Ident Ident :<: f)
+       => [(Ident, Free f ())] -> [(Ident, Free f ())]
+       -> Free f () -> Free f ()
 blockI = block
 
-blockF :: (Functor f, BlockStm FreshName FreshName :<: g)
-       => [(FreshName, Prog f g ())] -> [(FreshName, Prog f g ())]
-       -> Prog f g () -> Prog f g ()
+blockF :: (BlockStm FreshName FreshName :<: f)
+       => [(FreshName, Free f ())] -> [(FreshName, Free f ())]
+       -> Free f () -> Free f ()
 blockF = block
 
 v :: Word -> FreshName
@@ -54,44 +49,44 @@ renameSpec :: Spec
 renameSpec = do
     describe "renaming" $ do
         it "renames getting variables" $ do
-            let a = getIVar "x" :: IWhile
+            let a = getIVar "x"   :: IWhile
                 e = getFVar (v 0) :: FWhile
-            rename a `shouldBe` Right e
+            renameAST a `shouldBe` Right e
 
         it "renames variables in arithmetic expressions" $ do
             let a = add (getIVar "x") (getIVar "y") :: IWhile
                 e = add (getFVar (v 0)) (getFVar (v 1)) :: FWhile
-            rename a `shouldBe` Right e
+            renameAST a `shouldBe` Right e
 
         it "renames variables in boolean expressions" $ do
             let a = equ (getIVar "x") (getIVar "y") :: IWhile
                 e = equ (getFVar (v 0)) (getFVar (v 1)) :: FWhile
-            rename a `shouldBe` Right e
+            renameAST a `shouldBe` Right e
 
         it "renames setting variables" $ do
             let a = setIVar "x"   (num 1) :: IWhile
                 e = setFVar (v 0) (num 1) :: FWhile
-            rename a `shouldBe` Right e
+            renameAST a `shouldBe` Right e
 
         it "renames procedures" $ do
-            let a = do blockI [] [("p", skip)] (callI "p")   :: IWhile
-                e = do blockF [] [(p 0, skip)] (callF (p 0)) :: FWhile
-            rename a `shouldBe` Right e
+            let a = blockI [] [("p", skip)] (callI "p")   :: IWhile
+                e = blockF [] [(p 0, skip)] (callF (p 0)) :: FWhile
+            renameAST a `shouldBe` Right e
 
         it "fails if calling procedure which has been been declared yet" $ do
             let a = callI "p" :: IWhile
-                r = rename a  :: Either String FWhile
-            r `shouldBe` Left "No procedure declared"
+                r = renameAST a  :: Either RenameErr FWhile
+            r `shouldBe` Left (UndefinedProc "p")
 
         it "uses existing fresh name" $ do
-            let a = do export (getIVar "x");   export (getIVar "x") :: IWhile
-                e = do export (getFVar (v 0)); export (getFVar (v 0)) :: FWhile
-            rename a `shouldBe` Right e
+            let a = export (getIVar "x")   `comp` export (getIVar "x")   :: IWhile
+                e = export (getFVar (v 0)) `comp` export (getFVar (v 0)) :: FWhile
+            renameAST a `shouldBe` Right e
 
         it "renames variables in exports" $ do
             let a = export (getIVar "x") :: IWhile
                 e = export (getFVar (v 0)) :: FWhile
-            rename a `shouldBe` Right e
+            renameAST a `shouldBe` Right e
 
         it "renames variables in if statements" $ do
             let a = ifElse (equ (getIVar "x") (num 1))
@@ -100,48 +95,50 @@ renameSpec = do
                 e = ifElse (equ (getFVar (v 0)) (num 1))
                         (setFVar (v 0) (num 1))
                         (setFVar (v 1) (num 2)) :: FWhile
-            rename a `shouldBe` Right e
+            renameAST a `shouldBe` Right e
 
         it "renames variables in while statements" $ do
             let a = while (equ (getIVar "x") (num 1))
                         (setIVar "y" (num 1)) :: IWhile
                 e = while (equ (getFVar (v 0)) (num 1))
                         (setFVar (v 1) (num 1)) :: FWhile
-            rename a `shouldBe` Right e
+            renameAST a `shouldBe` Right e
 
         it "renames variables in block body" $ do
-            let a = do setIVar "x" (num 1)
-                       blockI [] []
-                           (setIVar "x" (num 1)) :: IWhile
+            let a = setIVar "x" (num 1) `comp`
+                        blockI [] [] (setIVar "x" (num 1)) :: IWhile
 
-                e = do setFVar (v 0) (num 1)
-                       blockF [] []
-                           (setFVar (v 0) (num 1)) :: FWhile
+                e = setFVar (v 0) (num 1) `comp`
+                        blockF [] [] (setFVar (v 0) (num 1)) :: FWhile
 
-            rename a `shouldBe` Right e
+            renameAST a `shouldBe` Right e
 
         it "gives new names to local variables in block" $ do
-            let a = do setIVar "x" (num 1)
-                       blockI [("x", num 1)] []
-                           (setIVar "x"   (num 1)) :: IWhile
+            let a = setIVar "x" (num 1) `comp`
+                        blockI [("x", num 1)] [] (setIVar "x"   (num 1)) :: IWhile
 
-                e = do setFVar (v 0) (num 1)
-                       blockF [(v 1, num 1)] []
-                           (setFVar (v 1) (num 1)) :: FWhile
+                e = setFVar (v 0) (num 1) `comp`
+                        blockF [(v 1, num 1)] [] (setFVar (v 1) (num 1)) :: FWhile
 
-            rename a `shouldBe` Right e
+            renameAST a `shouldBe` Right e
 
         it "uses local names inside procedures" $ do
-            let a = do setIVar "x" (num 1)
-                       blockI
+            let a = setIVar "x" (num 1) `comp`
+                        blockI
                            [("x", num 1)]
                            [("p", setIVar "x" (num 1))]
                            (setIVar "x"   (num 1)) :: IWhile
 
-                e = do setFVar (v 0) (num 1)
-                       blockF
+                e = setFVar (v 0) (num 1) `comp`
+                        blockF
                            [(v 1, num 1)]
                            [(p 0, setFVar (v 1) (num 1))]
                            (setFVar (v 1) (num 1)) :: FWhile
 
-            rename a `shouldBe` Right e
+            renameAST a `shouldBe` Right e
+
+        it "restores names after block" $ do
+            let a = setIVar "x"   (num 1) `comp` blockI [("x", num 2)] [] skip `comp` setIVar "x"   (num 3) :: IWhile
+                e = setFVar (v 0) (num 1) `comp` blockF [(v 1, num 2)] [] skip `comp` setFVar (v 0) (num 3) :: FWhile
+
+            renameAST a `shouldBe` Right e

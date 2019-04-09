@@ -23,24 +23,23 @@ import Helper.Eff.Void
 -- Syntax
 --------------------------------------------------------------------------------
 
--- TODO
 -- Throw an error of type e, and do not perform anything after as execution
 -- will either stop (if there is no catch), or jump to the catch handler.
-data Throw k
-    = Throw' String
+data Throw e k
+    = Throw' e
     deriving Functor
 
 -- Catch a thrown error of type e.
-data Catch k
-    = Catch' (String -> k)
+data Catch e k
+    = Catch' (e -> k)
     deriving Functor
 
 pattern Throw err <- (prj -> Just (Throw' err))
-throw :: Throw :<: f => String -> Prog f g a
+throw :: Throw e :<: f => e -> Prog f g a
 throw err = injectP (Throw' err)
 
 pattern Catch hdl <- (prj -> Just (Catch' hdl))
-catch :: (Functor f, Catch :<: g) => (String -> Prog f g ()) -> Prog f g ()
+catch :: (Functor f, Catch e :<: g) => (e -> Prog f g ()) -> Prog f g ()
 catch hdl = injectPSc (fmap (fmap return) (Catch' hdl))
 
 --------------------------------------------------------------------------------
@@ -56,34 +55,36 @@ catch hdl = injectPSc (fmap (fmap return) (Catch' hdl))
 -- is used to tie the recursive knot:
 --  m (Either a e)
 
-data CarrierExc f g a (n :: Nat)
-    = Exc { runExc :: Prog f g (Either String (CarrierExc' f g a n)) }
+data CarrierExc f g e a (n :: Nat)
+    = Exc { runExc :: Prog f g (Either e (CarrierExc' f g e a n)) }
 
-data CarrierExc' f g a :: Nat -> * where
-    CZ :: a -> CarrierExc' f g a 'Z
-    CS :: (Prog f g (Either String (CarrierExc' f g a n))) -> CarrierExc' f g a ('S n)
+data CarrierExc' f g e a :: Nat -> * where
+    CZ :: a -> CarrierExc' f g e a 'Z
+    CS :: (Prog f g (Either String (CarrierExc' f g e a n))) -> CarrierExc' f g e a ('S n)
 
-genExc :: (Functor f, Functor g) => a -> CarrierExc f g a 'Z
+genExc :: (Functor f, Functor g) => a -> CarrierExc f g e a 'Z
 genExc x = Exc (return (Right (CZ x)))
 
-algExc :: (Functor f, Functor g) => Alg (Throw :+: f) (Catch :+: g) (CarrierExc f g a)
+algExc :: (Functor f, Functor g) => Alg (Throw e :+: f) (Catch e :+: g) (CarrierExc f g e a)
 algExc = A a d p where
-    a :: (Functor f, Functor g) => (Throw :+: f) (CarrierExc f g a n) -> CarrierExc f g a n
+    a :: (Functor f, Functor g) => (Throw e :+: f) (CarrierExc f g e a n) -> CarrierExc f g e a n
     -- Don't perform continuation if an error is thrown.
     a (Throw err) = Exc (return (Left err))
     a (Other op)  = Exc (Op (fmap runExc op))
 
-    d :: (Functor f, Functor g) => (Catch :+: g) (CarrierExc f g a ('S n)) -> CarrierExc f g a n
-    d (Catch hdl) = error "Not implemented"
-    d (Other op)  = Exc (Scope (fmap f op)) where
-        f :: (Functor f, Functor g) => CarrierExc f g a ('S n) -> Prog f g (Prog f g (Either String (CarrierExc' f g a n)))
-        f (Exc runExc) = do
-            r <- runExc
-            case r of
-                Left err     -> return (return (Left err))
-                Right (CS x) -> return x
+    d :: (Functor f, Functor g) => (Catch e :+: g) (CarrierExc f g e a ('S n)) -> CarrierExc f g e a n
+    d = undefined
 
-    p :: (Functor f, Functor g) => CarrierExc f g a n -> CarrierExc f g a ('S n)
+    -- d (Catch hdl) = error "Not implemented"
+    -- d (Other op)  = Exc (Scope (fmap f op)) where
+    --     f :: (Functor f, Functor g) => CarrierExc f g a ('S n) -> Prog f g (Prog f g (Either String (CarrierExc' f g a n)))
+    --     f (Exc runExc) = do
+    --         r <- runExc
+    --         case r of
+    --             Left err     -> return (return (Left err))
+    --             Right (CS x) -> return x
+
+    p :: (Functor f, Functor g) => CarrierExc f g e a n -> CarrierExc f g e a ('S n)
     p (Exc runExc) = Exc $ do
         r <- runExc
         case r of
@@ -92,7 +93,7 @@ algExc = A a d p where
 
 -- Converts any program which might thrown an exception into a program that
 -- returns either its result, or an error.
-handleExc :: (Functor f, Functor g) => Prog (Throw :+: f) (Catch :+: g) a -> Prog f g (Either String a)
+handleExc :: (Functor f, Functor g) => Prog (Throw e :+: f) (Catch e :+: g) a -> Prog f g (Either e a)
 handleExc prog = do
     r <- runExc (run genExc algExc prog)
     case r of

@@ -70,7 +70,7 @@ docVarDecl (v, x) = do text "var "; pretty v; text " := "; x; text ";"
 docProcDecl :: Pretty p => (p, Doc ()) -> Doc ()
 docProcDecl (pname, body) = do
     text "proc "; pretty pname; text " is ";
-    parens (do nl; indented body)
+    parens (do nl; indented body; nl)
     text ";"
 
 docAST :: FreeAlg f (Doc ()) => Free f a -> Doc ()
