@@ -86,70 +86,58 @@ instance (Functor f, Functor g, Stm :<: f) => OpAlg Stm (Carrier f g a) where
         return (do export x'; k')
 
 instance (Functor f, Functor g, ScopeStm :<: g) => ScopeAlg ScopeStm (Carrier f g a) where
-    dem (While (Rn b) (Rn s)) = Rn $ do
-        rnB <- b
-        rnS <- s
-        return (do
-            (CS k) <- rnS
-            undefined)
+    dem (If (Rn b) (Rn t) (Rn e)) = Rn $ do
+        b' <- b; t' <- t; e' <- e
+        return (do (CS k) <- ifElse b' t' e'; k)
 
-    -- dem (If (Rn b) (Rn t) (Rn e)) = Rn $ do
-    --     b' <- b; t' <- t; e' <- e
-    --     return (do (CS k) <- ifElse b' t' e'; k)
-    --
-    -- dem (While (Rn b) (Rn s)) = Rn $ do
-    --     b' <- b; s' <- s
-    --     return (do (CS k) <- while b' s'; k)
+    dem (While (Rn b) (Rn s)) = Rn $ do
+        b' <- b; s' <- s
+        return (do (CS k) <- while b' s'; k)
 
 instance (Functor f, Functor g, BlockStm FreshName Ident :<: g)
     => ScopeAlg (BlockStm Ident Ident) (Carrier f g a) where
 
-    dem = undefined
+    dem (Block vs ps (Rn body)) = Rn (do
+        -- TODO
+        -- Continuation needs to occur outside `localNames` so names in
+        -- continuation are not given incorrect names.
 
-    -- dem (Block vs ps (Rn body)) = Rn (do
-    --     -- TODO
-    --     -- Continuation needs to occur outside `localNames` so names in
-    --     -- continuation are not given incorrect names.
-    --
-    --     (vs', ps', b') <- localNames (fsts vs) (do
-    --         vs' <- mapM fv vs
-    --         ps' <- mapM fp ps
-    --         body' <- body
-    --         return (vs', ps', body'))
-    --
-    --     return (do (CS k) <- block vs' ps' b'; k))
+        (vs', ps', b') <- localNames (fsts vs) (do
+            vs' <- mapM fv vs
+            ps' <- mapM fp ps
+            body' <- body
+            return (vs', ps', body'))
 
--- fv :: (Ident, Carrier f g a ('S n)) -> Prog Op Sc (FreshName, Prog f g (Carrier' f g a ('S n)))
--- fv (v, Rn x) = do
---     v' <- name v
---     x' <- x
---     return (v', x')
---
--- fp :: (Ident, Carrier f g a ('S n)) -> Prog Op Sc (Ident, Prog f g (Carrier' f g a ('S n)))
--- fp (pname, Rn body) = do
---     body' <- body
---     return (pname, body')
+        return (do (CS k) <- block vs' ps' b'; k))
+
+fv :: (Ident, Carrier f g a ('S n)) -> Prog Op Sc (FreshName, Prog f g (Carrier' f g a ('S n)))
+fv (v, Rn x) = do
+    v' <- name v
+    x' <- x
+    return (v', x')
+
+fp :: (Ident, Carrier f g a ('S n)) -> Prog Op Sc (Ident, Prog f g (Carrier' f g a ('S n)))
+fp (pname, Rn body) = do
+    body' <- body
+    return (pname, body')
 
 makeRn' :: (Functor h, Functor i)
      => (OpAlg f (Carrier h i a), ScopeAlg g (Carrier h i a))
      => Prog f g a -> Carrier h i a 'Z
 makeRn' = eval gen pro where
     gen :: (Functor h, Functor i) => a -> Carrier h i a 'Z
-    gen x = undefined --Rn (return (return (CZ x)))
+    gen x = Rn (return (return (CZ x)))
 
     pro ::  (Functor h, Functor i) => Carrier h i a n -> Carrier h i a ('S n)
-    pro = undefined
-    -- pro (Rn x) = Rn $ do
-    --     x' <- x
-    --     return (return (CS x'))
+    pro (Rn x) = Rn $ do
+        x' <- x
+        return (return (CS x'))
 
 makeRn :: (Functor h, Functor i)
      => (OpAlg f (Carrier h i a), ScopeAlg g (Carrier h i a))
      => Prog f g a -> Hdl (Prog h i a)
-makeRn = undefined
-
--- makeRn prog = case makeRn' prog of
---     (Rn x) -> fmap (fmap (\(CZ x) -> x)) x where
+makeRn prog = case makeRn' prog of
+    (Rn x) -> fmap (fmap (\(CZ x) -> x)) x where
 
 handle :: Hdl (Prog h i a) -> Prog h i a
 handle = handleVoid . handleRename
