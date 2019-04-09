@@ -75,6 +75,8 @@ data BlockStm v p k
     = Block (VarDecls v k) (ProcDecls p k) k
     deriving (Functor, Show)
 
+type While v p = Free (VarExp v :+: AExp :+: BExp :+: VarStm v :+: ProcStm p :+: Stm :+: BlockStm v p) ()
+
 -- Smart Constructors
 
 -- IVarExp

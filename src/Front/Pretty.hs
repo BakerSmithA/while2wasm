@@ -14,16 +14,16 @@ import Helper.Free.Alg
 instance Pretty Ident where
     pretty = text
 
-instance Pretty v => Alg (VarExp v) (Doc ()) where
+instance Pretty v => FreeAlg (VarExp v) (Doc ()) where
     alg (GetVar v) = pretty v
 
-instance Alg AExp (Doc ()) where
+instance FreeAlg AExp (Doc ()) where
     alg (Num n)    = showable n
     alg (Add x y)  = parens (do x; text " + "; y)
     alg (Sub x y)  = parens (do x; text " - "; y)
     alg (Mul x y)  = parens (do x; text " * "; y)
 
-instance Alg BExp (Doc ()) where
+instance FreeAlg BExp (Doc ()) where
     alg (T)       = text "true"
     alg (F)       = text "false"
     alg (Equ x y) = parens (do x; text " = "; y)
@@ -31,13 +31,13 @@ instance Alg BExp (Doc ()) where
     alg (And x y) = parens (do x; text " & "; y)
     alg (Not x)   = parens (do text "!"; x)
 
-instance Pretty v => Alg (VarStm v) (Doc ()) where
+instance Pretty v => FreeAlg (VarStm v) (Doc ()) where
     alg (SetVar var val) = do pretty var; text " := "; val
 
-instance Pretty p => Alg (ProcStm p) (Doc ()) where
+instance Pretty p => FreeAlg (ProcStm p) (Doc ()) where
     alg (Call pname) = do text "call "; pretty pname
 
-instance Alg Stm (Doc ()) where
+instance FreeAlg Stm (Doc ()) where
     alg (Skip)     = text "skip"
     alg (Export val) = do text "export "; val
     alg (If cond thenStm elseStm) = parens (do
@@ -51,7 +51,7 @@ instance Alg Stm (Doc ()) where
     -- Because printing is a side-effect, this produces correct result.
     alg (Comp s1 s2) = do s1; text ";"; nl; s2
 
-instance (Pretty v, Pretty p) => Alg (BlockStm v p) (Doc ()) where
+instance (Pretty v, Pretty p) => FreeAlg (BlockStm v p) (Doc ()) where
     alg (Block varDecls procDecls body) = do
         let docVs = map docVarDecl  varDecls  `sepByEnd` nl
             docPs = map docProcDecl procDecls `sepByEnd` nl
@@ -73,5 +73,5 @@ docProcDecl (pname, body) = do
     parens (do nl; indented body)
     text ";"
 
-docAST :: Alg f (Doc ()) => Free f a -> Doc ()
+docAST :: FreeAlg f (Doc ()) => Free f a -> Doc ()
 docAST = evalF (const (return ()))

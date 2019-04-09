@@ -37,8 +37,6 @@ import Helper.Pretty as Pretty
 --             putStrLn (show ast)
 --             putStrLn (show rn)
 
-type While v p = Free (VarExp v :+: AExp :+: BExp :+: VarStm v :+: ProcStm p :+: Stm :+: BlockStm v p) ()
-
 runComp :: FilePath -> FilePath -> IO ()
 runComp inPath outPath = do
     contents <- readFile inPath
