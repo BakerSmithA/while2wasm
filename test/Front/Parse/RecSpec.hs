@@ -4,10 +4,8 @@ module Front.Parse.RecSpec where
 
 import Test.Hspec
 import Front.AST
-import Front.Eq()
-import Front.Pretty()
 import qualified Front.Parse.Rec as R
-import Helper.Prog
+import Helper.Scope.Prog
 import Helper.Co
 
 type Op    v p = VarExp v :+: AExp :+: BExp :+: VarStm v :+: ProcStm p :+: Stm

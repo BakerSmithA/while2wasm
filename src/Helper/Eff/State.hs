@@ -14,7 +14,7 @@ module Helper.Eff.State
 , handleState
 ) where
 
-import Helper.Prog
+import Helper.Scope.Prog
 import Helper.Co
 import Helper.Eff
 import Helper.Eff.Void
@@ -38,15 +38,15 @@ data LocalSt s k
 
 pattern Get fk <- (prj -> Just (Get' fk))
 get :: (Functor f, Functor g, State s :<: f) => Prog f g s
-get = inject (Get' Var)
+get = injectP (Get' Var)
 
 pattern Put s k <- (prj -> Just (Put' s k))
 put :: (Functor f, Functor g, State s :<: f) => s -> Prog f g ()
-put s = inject (Put' s (Var ()))
+put s = injectP (Put' s (Var ()))
 
 pattern LocalSt s k <- (prj -> Just (LocalSt' s k))
 localSt :: (Functor f, Functor g, LocalSt s :<: g) => s -> Prog f g a -> Prog f g a
-localSt s inner = injectS (fmap (fmap return) (LocalSt' s inner))
+localSt s inner = injectPSc (fmap (fmap return) (LocalSt' s inner))
 
 --------------------------------------------------------------------------------
 -- Semantics

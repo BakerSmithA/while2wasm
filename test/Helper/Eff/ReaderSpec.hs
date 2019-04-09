@@ -3,7 +3,7 @@
 module Helper.Eff.ReaderSpec where
 
 import Test.Hspec
-import Helper.Prog
+import Helper.Scope.Prog
 import Helper.Co
 import Helper.Eff.Reader
 import Helper.Eff.Void

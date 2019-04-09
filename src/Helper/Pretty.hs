@@ -28,7 +28,7 @@ module Helper.Pretty
 ) where
 
 import Data.Word (Word)
-import Helper.Prog
+import Helper.Scope.Prog
 import Helper.Co
 
 --------------------------------------------------------------------------------

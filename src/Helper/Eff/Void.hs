@@ -8,7 +8,7 @@ module Helper.Eff.Void
 , handleVoid
 ) where
 
-import Helper.Prog
+import Helper.Scope.Prog
 
 -- Base case for composition.
 

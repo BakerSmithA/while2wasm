@@ -4,7 +4,7 @@ module Transform.Capture.StoreEffSpec where
 
 import Test.Hspec
 import Transform.Capture.StoreEff
-import Helper.Prog
+import Helper.Scope.Prog
 import Helper.Co
 import Helper.Eff.Void
 

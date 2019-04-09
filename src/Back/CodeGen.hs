@@ -9,7 +9,7 @@ module Back.CodeGen where
 
 import Transform.Rename (FreshName)
 import Back.WASM
-import Helper.Prog
+import Helper.Scope.Prog
 
 --------------------------------------------------------------------------------
 -- Syntax

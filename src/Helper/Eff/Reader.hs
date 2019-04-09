@@ -13,7 +13,7 @@ module Helper.Eff.Reader
 , handleReader
 ) where
 
-import Helper.Prog
+import Helper.Scope.Prog
 import Helper.Co
 import Helper.Eff
 
@@ -33,11 +33,11 @@ data LocalR r k
 
 pattern Ask fk <- (prj -> Just (Ask' fk))
 ask :: (Functor f, Functor g, Ask r :<: f) => Prog f g r
-ask = inject (Ask' Var)
+ask = injectP (Ask' Var)
 
 pattern LocalR r k <- (prj -> Just (LocalR' r k))
 localR :: (Functor f, Functor g, LocalR r :<: g) => r -> Prog f g a -> Prog f g a
-localR r inner = injectS (fmap (fmap return) (LocalR' r inner))
+localR r inner = injectPSc (fmap (fmap return) (LocalR' r inner))
 
 --------------------------------------------------------------------------------
 -- Semantics

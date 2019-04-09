@@ -1,126 +1,77 @@
 
 -- Pretty printing While AST using Datatypes a la Carte methods.
+-- Uses continuation passing style to describe pretty printing in imperative style.
 
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
-{-# LANGUAGE TypeOperators, DataKinds #-}
-{-# LANGUAGE FlexibleContexts, KindSignatures, GADTs #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, FlexibleContexts #-}
 
-module Front.Pretty
-( pretty
-) where
+module Front.Pretty (docAST) where
 
 import Front.AST
 import Helper.Pretty
-import Helper.Alg
-import Helper.Co
-
-data Carrier n = D (Doc (Carrier' n))
-
-data Carrier' :: Nat -> * where
-    CZ :: Carrier' 'Z
-    CS :: Doc (Carrier' n) -> Carrier' ('S n)
-    -- Required because not all parts of AST have continuations. But, they still
-    -- have to produce a value of type Carrier' a n. CN acts as empty continuation
-    -- which does not change nesting level.
-    CN :: Carrier' n
+import Helper.Free.Free
+import Helper.Free.Alg
 
 instance Pretty Ident where
     pretty = text
 
-instance Pretty v => OpAlg (VarExp v) Carrier where
-    -- TODO: Investigate more
-    -- Because GetVar has no continuation, CN is returned. This is an empty
-    -- carrier which does not change the 'level' of nesting. `text v` is
-    -- not returned in the CN constructor because this would cause the text
-    -- to render in the wrong place.
-    --
-    -- CN is used as the continuation, but because GetVar has no continuation
-    -- then CN is empty.
-    alg (GetVar v) = D $ do pretty v; return CN
+instance Pretty v => Alg (VarExp v) (Doc ()) where
+    alg (GetVar v) = pretty v
 
-instance OpAlg AExp Carrier where
-    alg (Num n)           = D $ do showable n; return CN
-    alg (Add (D x) (D y)) = D $ parens (do x; text " + "; y)
-    alg (Sub (D x) (D y)) = D $ parens (do x; text " - "; y)
-    alg (Mul (D x) (D y)) = D $ parens (do x; text " * "; y)
+instance Alg AExp (Doc ()) where
+    alg (Num n)    = showable n
+    alg (Add x y)  = parens (do x; text " + "; y)
+    alg (Sub x y)  = parens (do x; text " - "; y)
+    alg (Mul x y)  = parens (do x; text " * "; y)
 
-instance OpAlg BExp Carrier where
-    alg (T)               = D $ do text "true"; return CN
-    alg (F)               = D $ do text "false"; return CN
-    alg (Equ (D x) (D y)) = D $ parens (do x; text " = ";  y)
-    alg (LEq (D x) (D y)) = D $ parens (do x; text " <= "; y)
-    alg (And (D x) (D y)) = D $ parens (do x; text " && "; y)
-    alg (Not (D x))       = D $ do text "!"; parens x
+instance Alg BExp (Doc ()) where
+    alg (T)       = text "true"
+    alg (F)       = text "false"
+    alg (Equ x y) = parens (do x; text " = "; y)
+    alg (LEq x y) = parens (do x; text " <= "; y)
+    alg (And x y) = parens (do x; text " & "; y)
+    alg (Not x)   = parens (do text "!"; x)
 
-instance Pretty v => OpAlg (VarStm v) Carrier where
-    alg (SetVar v (D x) (D k)) = D (do pretty v; text " := "; x; nl; k)
+instance Pretty v => Alg (VarStm v) (Doc ()) where
+    alg (SetVar var val) = do pretty var; text " := "; val
 
-instance Pretty p => OpAlg (ProcStm p) Carrier where
-    alg (Call fname (D k)) = D $ do text "call "; pretty fname; nl; k
+instance Pretty p => Alg (ProcStm p) (Doc ()) where
+    alg (Call pname) = do text "call "; pretty pname
 
-instance OpAlg Stm Carrier where
-    alg (Skip (D k))         = D $ do text "skip"; nl; k
-    alg (Export (D x) (D k)) = D $ do text "export "; x; nl; k
+instance Alg Stm (Doc ()) where
+    alg (Skip)     = text "skip"
+    alg (Export val) = do text "export "; val
+    alg (If cond thenStm elseStm) = parens (do
+        text "if "; cond; text " then"; nl
+        indented thenStm; nl
+        line "else"
+        indented elseStm; nl)
+    alg (While cond body) = parens (do
+        text "while "; cond; text " do"; nl
+        indented body; nl)
+    -- Because printing is a side-effect, this produces correct result.
+    alg (Comp s1 s2) = do s1; text ";"; nl; s2
 
-demDoc :: Carrier' ('S n) -> Doc (Carrier' n)
-demDoc (CS doc) = doc
-demDoc (CN)     = return CN
+instance (Pretty v, Pretty p) => Alg (BlockStm v p) (Doc ()) where
+    alg (Block varDecls procDecls body) = do
+        let docVs = map docVarDecl  varDecls  `sepByEnd` nl
+            docPs = map docProcDecl procDecls `sepByEnd` nl
 
-instance ScopeAlg ScopeStm Carrier where
-    dem (If (D b) (D t) (D e)) = D (do
-        k <- parens (do
-            text "if "; b; text " then"; nl
-            indented t
-            line "else"
-            k <- indented e
-            -- Return the demoted document, If use `demDoc k` without
-            -- returning the continuation is written inside the parenthesis.
-            -- By using return, it can be given to outside the parenthesis,
-            -- and then written out.
-            return (demDoc k))
-        nl
-        k)
-
-    dem (While (D b) (D s)) = D (do
-        k <- parens (do
-            text "while "; b; text " do"; nl
-            k <- indented s
-            return (demDoc k))
-        nl
-        k)
-
-instance (Pretty v, Pretty p) => ScopeAlg (BlockStm v p) Carrier where
-    dem (Block vs ps (D body)) = D (do
-        let docVs = map docVarDecl  vs `sepByEnd` nl
-            docPs = map docProcDecl ps `sepByEnd` nl
-
-        text "begin"; nl
-        k <- indented (do
+        line "begin"
+        indented (do
             docVs
             docPs
-            k <- body
-            return (demDoc k))
-        line "end"
-        k)
+            body
+            nl)
+        text "end"
 
--- Throws away continuation because the continuation is the same as that of the
--- procedure body. Therefore, do not need to use `demDoc` which unwraps the
--- continuation after the nested continuation so it can be run.
-docVarDecl :: Pretty v => (v, Carrier ('S n)) -> Doc ()
-docVarDecl (v, D x) = do text "var "; pretty v; text " := "; x; text ";"
+docVarDecl :: Pretty v => (v, Doc ()) -> Doc ()
+docVarDecl (v, x) = do text "var "; pretty v; text " := "; x; text ";"
 
-docProcDecl :: Pretty p => (p, Carrier ('S n)) -> Doc ()
-docProcDecl (f, (D body)) = do
-    text "proc "; pretty f; text " is ";
+docProcDecl :: Pretty p => (p, Doc ()) -> Doc ()
+docProcDecl (pname, body) = do
+    text "proc "; pretty pname; text " is ";
     parens (do nl; indented body)
     text ";"
 
-docAST :: (OpAlg f Carrier, ScopeAlg g Carrier) => Prog f g () -> Doc ()
-docAST prog =
-    let gen = const (D (return CZ))
-        pro (D doc) = D (return (CS doc))
-    in case eval gen pro prog of
-        (D doc) -> doc >> return ()
-
-instance (OpAlg f Carrier, ScopeAlg g Carrier) => Show (Prog f g ()) where
-    show = toString 0 . docAST
+docAST :: Alg f (Doc ()) => Free f a -> Doc ()
+docAST = evalF (const (return ()))

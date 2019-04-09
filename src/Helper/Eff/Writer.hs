@@ -11,7 +11,7 @@ module Helper.Eff.Writer
 , handleWriter
 ) where
 
-import Helper.Prog
+import Helper.Scope.Prog
 import Helper.Co
 import Helper.Eff
 import Helper.Eff.Void
@@ -27,7 +27,7 @@ data Tell w k
 
 pattern Tell w k <- (prj -> Just (Tell' w k))
 tell :: (Functor f, Functor g, Tell w :<: f) => w -> Prog f g ()
-tell w = inject (Tell' w (Var ()))
+tell w = injectP (Tell' w (Var ()))
 
 --------------------------------------------------------------------------------
 -- Semantics

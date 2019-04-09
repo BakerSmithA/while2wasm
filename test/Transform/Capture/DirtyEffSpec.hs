@@ -5,7 +5,7 @@ module Transform.Capture.DirtyEffSpec where
 import Data.Set as Set
 import Test.Hspec
 import Transform.Capture.DirtyEff
-import Helper.Prog
+import Helper.Scope.Prog
 import Helper.Co
 import Helper.Eff.Void
 

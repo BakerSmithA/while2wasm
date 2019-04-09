@@ -5,7 +5,7 @@ module Transform.Capture.LocationEffSpec where
 import Test.Hspec
 import Data.Set as Set
 import Transform.Capture.LocationEff
-import Helper.Prog
+import Helper.Scope.Prog
 import Helper.Co
 import Helper.Eff.Void
 

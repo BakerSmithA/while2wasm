@@ -23,7 +23,7 @@ import Control.Monad (mapM_)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Front.AST (Ident)
-import Helper.Prog
+import Helper.Scope.Prog
 import Helper.Pretty
 import Helper.Co
 import Helper.Eff.State
@@ -61,19 +61,19 @@ data LocalName v k
 -- These help make pattern matching in effect handler more readable.
 pattern Name v fk <- (prj -> Just (Name' v fk))
 name :: (Functor f, Functor g) => Rename v :<: f => v -> Prog f g FreshName
-name v = inject (Name' v Var)
+name v = injectP (Name' v Var)
 
 pattern Exists p fk <- (prj -> Just (Exists' p fk))
 exists :: (Functor f, Functor g) => Rename v :<: f => v -> Prog f g Bool
-exists p = inject (Exists' p Var)
+exists p = injectP (Exists' p Var)
 
 pattern Local vs k <- (prj -> Just (Local' vs k))
 localNames :: (Functor f, Functor g, LocalName v :<: g) => [v] -> Prog f g a -> Prog f g a
-localNames vs inner = injectS (fmap (fmap return) (Local' vs inner))
+localNames vs inner = injectPSc (fmap (fmap return) (Local' vs inner))
 
 pattern Names fk <- (prj -> Just (Names' fk))
 names :: (Functor f, Functor g, Rename v :<: f) => Prog f g (Names v)
-names = inject (Names' Var)
+names = injectP (Names' Var)
 
 --------------------------------------------------------------------------------
 -- Semantics

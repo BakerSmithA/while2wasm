@@ -14,7 +14,7 @@ module Front.Parse.Rec
 ) where
 
 import qualified Front.AST as A
-import Helper.Prog
+import Helper.Free.Free
 import Helper.Co
 
 type Ident = String
@@ -54,34 +54,33 @@ data Stm
     | Block VarDecls ProcDecls Stm
     deriving (Eq, Show)
 
-instance (A.VarExp Ident :<: f, A.AExp :<: f)
-        => Progable AExp f g where
-    prog (Num n)   = A.num n
-    prog (Ident v) = A.getVar v
-    prog (Add x y) = A.add (prog x) (prog y)
-    prog (Sub x y) = A.sub (prog x) (prog y)
-    prog (Mul x y) = A.mul (prog x) (prog y)
+instance (Functor f, A.VarExp Ident :<: f, A.AExp :<: f) => Freeable AExp f where
+    free (Num n)   = A.num n
+    free (Ident v) = A.getVar v
+    free (Add x y) = A.add (free x) (free y)
+    free (Sub x y) = A.sub (free x) (free y)
+    free (Mul x y) = A.mul (free x) (free y)
 
-instance (A.VarExp Ident :<: f, A.AExp :<: f, A.BExp :<: f)
-        => Progable BExp f g where
-    prog (T)       = A.true
-    prog (F)       = A.false
-    prog (Equ x y) = A.equ  (prog x) (prog y)
-    prog (LEq x y) = A.leq  (prog x) (prog y)
-    prog (And x y) = A.andB (prog x) (prog y)
-    prog (Not x)   = A.notB (prog x)
+instance (Functor f, A.VarExp Ident :<: f, A.AExp :<: f, A.BExp :<: f) => Freeable BExp f where
+    free (T)       = A.true
+    free (F)       = A.false
+    free (Equ x y) = A.equ  (free x) (free y)
+    free (LEq x y) = A.leq  (free x) (free y)
+    free (And x y) = A.andB (free x) (free y)
+    free (Not x)   = A.notB (free x)
 
-instance ( A.VarExp Ident :<: f, A.AExp :<: f, A.BExp :<: f
-         , A.VarStm Ident :<: f, A.ProcStm Ident :<: f, A.Stm :<: f
-         , A.ScopeStm :<: g, A.BlockStm Ident Ident :<: g )
-         => Progable Stm f g where
-    prog (Skip)          = A.skip
-    prog (Assign v x)    = A.setVar v (prog x)
-    prog (Comp s1 s2)    = do prog s1; prog s2
-    prog (If b t e)      = A.ifElse (prog b) (prog t) (prog e)
-    prog (While b s)     = A.while (prog b) (prog s)
-    prog (Export x)      = A.export (prog x)
-    prog (Call fname)    = A.call fname
-    prog (Block vs ps s) = A.block vs' ps' (prog s) where
-        vs' = A.mapSnd prog vs
-        ps' = A.mapSnd prog ps
+instance (Functor f,
+          A.VarExp Ident :<: f, A.AExp :<: f, A.BExp :<: f,
+          A.VarStm Ident :<: f, A.ProcStm Ident :<: f, A.Stm :<: f,
+          A.BlockStm Ident Ident :<: f)
+      => Freeable Stm f where
+    free (Skip)          = A.skip
+    free (Assign v x)    = A.setVar v (free x)
+    free (Comp s1 s2)    = A.comp (free s1) (free s2)
+    free (If b t e)      = A.ifElse (free b) (free t) (free e)
+    free (While b s)     = A.while (free b) (free s)
+    free (Export x)      = A.export (free x)
+    free (Call fname)    = A.call fname
+    free (Block vs ps s) = A.block vs' ps' (free s) where
+        vs' = A.mapSnd free vs
+        ps' = A.mapSnd free ps

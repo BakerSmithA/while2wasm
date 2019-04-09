@@ -7,19 +7,20 @@
 module Helper.Co
 ( (:+:)(..)
 , (:<:)(..)
-, inject
-, injectS
+, injectF
+, injectP
+, injectPSc
 ) where
 
-import Data.Functor.Classes (Eq1, liftEq)
-import Helper.Prog
+import Helper.Scope.Prog
+import Helper.Free.Free
 
 infixr 5 :+:
 
 data (f :+: g) e
     = L (f e)
     | R (g e)
-    deriving (Show)
+    deriving (Eq, Show)
 
 instance (Functor f, Functor g) => Functor (f :+: g) where
     fmap f (L x) = L (fmap f x)
@@ -48,15 +49,14 @@ instance (Functor f, Functor g, Functor h, f :<: g) => f :<: (h :+: g) where
     prj (R ga) = prj ga
     prj _      = Nothing
 
+-- Inject into Free tree.
+injectF :: (f :<: g) => f (Free g a) -> Free g a
+injectF = Free . inj
+
 -- Inject into the non-scoped instruction of a Prog tree.
-inject :: (f :<: h) => f (Prog h g a) -> Prog h g a
-inject = Op . inj
+injectP :: (f :<: h) => f (Prog h g a) -> Prog h g a
+injectP = Op . inj
 
 -- Inject into the scoped instruction of a Prog tree.
-injectS :: (h :<: g) => h (Prog f g (Prog f g a)) -> Prog f g a
-injectS = Scope . inj
-
-instance (Eq1 f, Eq1 g) => Eq1 (f :+: g) where
-    liftEq (==) (L x) (L y) = liftEq (==) x y
-    liftEq (==) (R x) (R y) = liftEq (==) x y
-    liftEq _ _ _ = False
+injectPSc :: (h :<: g) => h (Prog f g (Prog f g a)) -> Prog f g a
+injectPSc = Scope . inj

@@ -1,11 +1,11 @@
 
--- Used to define algebras for use with Datatypes a la Carte methods.
+-- Used to define algebras over Prog for use with Datatypes a la Carte methods.
 
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, TypeOperators, FlexibleContexts #-}
 {-# LANGUAGE DataKinds, KindSignatures, RankNTypes #-}
 
-module Helper.Alg
-( module Helper.Prog
+module Helper.Scope.Alg
+( module Helper.Scope.Prog
 , OpAlg(..)
 , ScopeAlg(..)
 , Pro
@@ -14,7 +14,7 @@ module Helper.Alg
 , evalId
 ) where
 
-import Helper.Prog
+import Helper.Scope.Prog
 import Helper.Co
 
 -- Algebra for Op constructor of Prog.

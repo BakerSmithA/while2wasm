@@ -46,7 +46,7 @@ module Back.WASM
 ) where
 
 import Data.Word (Word32)
-import Helper.Prog
+import Helper.Scope.Prog
 import Helper.Co
 
 --------------------------------------------------------------------------------
@@ -178,55 +178,55 @@ data Module = Module {
 -- Smart constructors
 
 nop :: WASM ()
-nop = inject (NOP (Var ()))
+nop = injectP (NOP (Var ()))
 
 constNum :: Integer -> WASM ()
-constNum i = inject (CONST i (Var ()))
+constNum i = injectP (CONST i (Var ()))
 
 uniOp :: UniOp -> WASM ()
 uniOp NOT = do constNum 1; relOp EQU
 
 binOp :: BinOp -> WASM ()
-binOp op = inject (BIN_OP op (Var ()))
+binOp op = injectP (BIN_OP op (Var ()))
 
 relOp :: RelOp -> WASM ()
-relOp op = inject (REL_OP op (Var ()))
+relOp op = injectP (REL_OP op (Var ()))
 
 getLocal :: LocalName -> WASM ()
-getLocal name = inject (GET_LOCAL name (Var ()))
+getLocal name = injectP (GET_LOCAL name (Var ()))
 
 setLocal :: LocalName -> WASM ()
-setLocal name = inject (SET_LOCAL name (Var ()))
+setLocal name = injectP (SET_LOCAL name (Var ()))
 
 getGlobal :: GlobalName -> WASM ()
-getGlobal name = inject (GET_GLOBAL name (Var ()))
+getGlobal name = injectP (GET_GLOBAL name (Var ()))
 
 setGlobal :: GlobalName -> WASM ()
-setGlobal name = inject (SET_GLOBAL name (Var ()))
+setGlobal name = injectP (SET_GLOBAL name (Var ()))
 
 load :: MemOffset -> WASM ()
-load offset = inject (LOAD offset (Var ()))
+load offset = injectP (LOAD offset (Var ()))
 
 store :: MemOffset -> WASM ()
-store offset = inject (STORE offset (Var ()))
+store offset = injectP (STORE offset (Var ()))
 
 br :: Label -> WASM ()
-br label = inject (BR label (Var ()))
+br label = injectP (BR label (Var ()))
 
 brIf :: Label -> WASM ()
-brIf label = inject (BR_IF label (Var ()))
+brIf label = injectP (BR_IF label (Var ()))
 
 ret :: WASM ()
-ret = inject (RET (Var ()))
+ret = injectP (RET (Var ()))
 
 call :: FuncName -> WASM ()
-call name = inject (CALL name (Var ()))
+call name = injectP (CALL name (Var ()))
 
 block :: WASM () -> WASM ()
-block body = injectS (fmap (fmap return) (BLOCK body))
+block body = injectPSc (fmap (fmap return) (BLOCK body))
 
 ifElse :: WASM () -> WASM () -> WASM ()
-ifElse t e = injectS (fmap (fmap return) (IF t e))
+ifElse t e = injectPSc (fmap (fmap return) (IF t e))
 
 loop :: WASM () -> WASM ()
-loop body = injectS (fmap (fmap return) (LOOP body))
+loop body = injectPSc (fmap (fmap return) (LOOP body))

@@ -4,7 +4,7 @@ module Transform.Rename.RenameEffSpec where
 
 import Test.Hspec
 import Transform.Rename.RenameEff
-import Helper.Prog
+import Helper.Scope.Prog
 import Helper.Co
 import Helper.Eff.Void
 

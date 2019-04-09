@@ -11,8 +11,8 @@ module Transform.Rename
 
 import Transform.Rename.AST
 import Transform.Rename.RenameEff
-import Helper.Prog
-import Helper.Alg
+import Helper.Scope.Prog
+import Helper.Scope.Alg
 import Helper.Eff.Void
 import Helper.Eff.Exception
 

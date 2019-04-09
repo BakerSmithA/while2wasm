@@ -14,7 +14,7 @@ module Helper.Eff.Exception
 , handleExc
 ) where
 
-import Helper.Prog
+import Helper.Scope.Prog
 import Helper.Co
 import Helper.Eff
 import Helper.Eff.Void
@@ -37,11 +37,11 @@ data Catch k
 
 pattern Throw err <- (prj -> Just (Throw' err))
 throw :: Throw :<: f => String -> Prog f g a
-throw err = inject (Throw' err)
+throw err = injectP (Throw' err)
 
 pattern Catch hdl <- (prj -> Just (Catch' hdl))
 catch :: (Functor f, Catch :<: g) => (String -> Prog f g ()) -> Prog f g ()
-catch hdl = injectS (fmap (fmap return) (Catch' hdl))
+catch hdl = injectPSc (fmap (fmap return) (Catch' hdl))
 
 --------------------------------------------------------------------------------
 -- Semantics

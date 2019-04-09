@@ -21,7 +21,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
-import Helper.Prog
+import Helper.Scope.Prog
 import Helper.Co
 import Helper.Eff
 import Helper.Eff.State
@@ -47,11 +47,11 @@ data ModScope k
 
 pattern Modified v k <- (prj -> Just (Modified' v k))
 modified :: (Functor f, Functor g, Modified v :<: f) => v -> Prog f g ()
-modified v = inject (Modified' v (Var ()))
+modified v = injectP (Modified' v (Var ()))
 
 pattern ModScope k <- (prj -> Just (ModScope' k))
 modScope :: (Functor f, Functor g, ModScope :<: g) => Prog f g a -> Prog f g a
-modScope inner = injectS (fmap (fmap return) (ModScope' inner))
+modScope inner = injectPSc (fmap (fmap return) (ModScope' inner))
 
 --------------------------------------------------------------------------------
 -- Semantics

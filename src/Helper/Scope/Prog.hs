@@ -8,7 +8,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Helper.Prog
+module Helper.Scope.Prog
 ( Prog(..)
 , Nat(..)
 , Alg(..)
@@ -34,12 +34,11 @@ data Prog f g a
     | Scope (g (Prog f g (Prog f g a)))
     deriving Functor
 
-instance (Show a, Show b, Show (f (Prog f g a)), Show (g (Prog f g b)))
-    => Show (Prog f g a) where
-
-        show (Var x) = show x
-        show (Op op) = show op
-        show (Scope sc) = show sc
+-- TODO: Show Scope
+instance (Show a, Show (f (Prog f g a)), Show (g (Prog f g a))) => Show (Prog f g a) where
+        show (Var x)    = "Var (" ++ show x ++ ")"
+        show (Op op)    = "Op (" ++ show op ++ ")"
+        show (Scope sc) = "Scope (TODO)"
 
 instance (Functor f, Functor g) => Applicative (Prog f g) where
     pure  = Var

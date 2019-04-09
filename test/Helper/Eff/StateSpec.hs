@@ -3,7 +3,7 @@
 module Helper.Eff.StateSpec where
 
 import Test.Hspec
-import Helper.Prog
+import Helper.Scope.Prog
 import Helper.Co
 import Helper.Eff.State
 import Helper.Eff.Void

@@ -12,9 +12,9 @@ module Helper.Eff.Fresh
 ) where
 
 import Data.Word
-import Helper.Prog
+import Helper.Scope.Prog
 import Helper.Co
-import Helper.Alg
+import Helper.Scope.Alg
 import Helper.Eff.State
 import Helper.Eff
 
@@ -29,7 +29,7 @@ data Fresh k
 
 pattern Fresh fk <- (prj -> Just (Fresh' fk))
 fresh :: (Functor f, Functor g, Fresh :<: f) => Prog f g Word
-fresh = inject (Fresh' Var)
+fresh = injectP (Fresh' Var)
 
 --------------------------------------------------------------------------------
 -- Semantics

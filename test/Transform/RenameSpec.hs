@@ -6,7 +6,7 @@ import Test.Hspec
 import Front.AST
 import Front.Eq()
 import Front.Pretty()
-import Helper.Prog hiding (p)
+import Helper.Scope.Prog hiding (p)
 import Helper.Co
 import Transform.Rename
 

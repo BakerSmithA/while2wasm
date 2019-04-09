@@ -4,7 +4,7 @@ module Helper.Eff.FreshSpec where
 
 import Data.Word (Word)
 import Test.Hspec
-import Helper.Prog
+import Helper.Scope.Prog
 import Helper.Co
 import Helper.Eff.Fresh
 import Helper.Eff.Void
