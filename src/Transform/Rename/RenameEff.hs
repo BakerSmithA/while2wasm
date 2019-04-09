@@ -9,25 +9,22 @@
 
 module Transform.Rename.RenameEff
 ( FreshName
+, Fresh
 , Rename
-, LocalName
-, name
+, fresh
 , exists
-, names
-, localNames
+, rename
 , handleRename
-, Names
 ) where
 
 import Control.Monad (mapM_)
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Front.AST (Ident)
 import Helper.Scope.Prog
 import Helper.Pretty
 import Helper.Co
 import Helper.Eff.State
-import Helper.Eff.Fresh
+import qualified Helper.Eff.Fresh as F
 import Helper.Eff
 
 --------------------------------------------------------------------------------
@@ -40,40 +37,35 @@ instance Pretty FreshName where
     pretty n = do text "$"; showable n
 
 -- v is the type of variables to be renamed.
-data Rename v k
+data Fresh v k
     -- Returns fresh name corresponding to renamed identifier. If the name
     -- is unseen then a fresh mapping is created.
-    = Name' v (FreshName -> k)
+    = Fresh' v (FreshName -> k)
     -- Returns whether a mapping exists.
     | Exists' v (Bool -> k)
-    | Names' (Names v -> k)
     deriving Functor
 
-data LocalName v k
+data Rename v k
     -- Assigns fresh names to all supplied names, and uses these new names
     -- inside continuation. After local, original names are restored.
-    = Local' [v] k
+    = Rename' [v] k
     deriving Functor
 
 -- Smart constructors
 
 -- Use pattern synonyms and view patterns suggested in Effect Handlers in Scope.
 -- These help make pattern matching in effect handler more readable.
-pattern Name v fk <- (prj -> Just (Name' v fk))
-name :: (Functor f, Functor g) => Rename v :<: f => v -> Prog f g FreshName
-name v = injectP (Name' v Var)
+pattern Fresh v fk <- (prj -> Just (Fresh' v fk))
+fresh :: (Functor f, Functor g) => Fresh v :<: f => v -> Prog f g FreshName
+fresh v = injectP (Fresh' v Var)
 
 pattern Exists p fk <- (prj -> Just (Exists' p fk))
-exists :: (Functor f, Functor g) => Rename v :<: f => v -> Prog f g Bool
+exists :: (Functor f, Functor g) => Fresh v :<: f => v -> Prog f g Bool
 exists p = injectP (Exists' p Var)
 
-pattern Local vs k <- (prj -> Just (Local' vs k))
-localNames :: (Functor f, Functor g, LocalName v :<: g) => [v] -> Prog f g a -> Prog f g a
-localNames vs inner = injectPSc (fmap (fmap return) (Local' vs inner))
-
-pattern Names fk <- (prj -> Just (Names' fk))
-names :: (Functor f, Functor g, Rename v :<: f) => Prog f g (Names v)
-names = injectP (Names' Var)
+pattern Rename vs k <- (prj -> Just (Rename' vs k))
+rename :: (Functor f, Functor g, Rename v :<: g) => [v] -> Prog f g a -> Prog f g a
+rename vs inner = injectPSc (fmap (fmap return) (Rename' vs inner))
 
 --------------------------------------------------------------------------------
 -- Semantics
@@ -86,17 +78,17 @@ emptyNames = Map.empty
 
 -- Creates a mapping from v to a fresh variable name, and updates state.
 insFresh :: (Functor f, Functor g, Ord v)
-         => v -> Prog (State (Names v) :+: Fresh :+: f) (LocalSt (Names v) :+: g) FreshName
+         => v -> Prog (State (Names v) :+: F.Fresh :+: f) (LocalSt (Names v) :+: g) FreshName
 insFresh v = do
     env <- get
-    next <- fresh
+    next <- F.fresh
     put (Map.insert v next env)
     return next
 
 -- Creates a mapping from each variable to a fresh name, and updates state,
 -- returning updated state.
 insManyFresh :: (Functor f, Functor g, Ord v)
-             => [v] -> Prog (State (Names v) :+: Fresh :+: f) (LocalSt (Names v) :+: g) (Names v)
+             => [v] -> Prog (State (Names v) :+: F.Fresh :+: f) (LocalSt (Names v) :+: g) (Names v)
 insManyFresh vs = do mapM_ insFresh vs; get
 
 -- Overwrites duplicate entries with old variable names.
@@ -108,7 +100,7 @@ restoreNames old new = Map.union old new
 -- This ordering of effect handlers ensures the fresh is global, and so
 -- even inside local scope of a state, globally fresh values will be produced.
 -- Also see `handleRename` function.
-type Ctx f g v a = Prog (State (Names v) :+: Fresh :+: f) (LocalSt (Names v) :+: g) a
+type Ctx f g v a = Prog (State (Names v) :+: F.Fresh :+: f) (LocalSt (Names v) :+: g) a
 
 -- Need to use carriers using CZ and CS because the state needs to be updated
 -- after running local continuation, before running remaining continuation.
@@ -125,10 +117,10 @@ getNames = get
 genRn :: (Functor f, Functor g) => a -> CarrierRn f g v a 'Z
 genRn x = Rn (return (CZ x))
 
-algRn :: (Functor f, Functor g, Ord v) => Alg (Rename v :+: f) (LocalName v :+: g) (CarrierRn f g v a)
+algRn :: (Functor f, Functor g, Ord v) => Alg (Fresh v :+: f) (Rename v :+: g) (CarrierRn f g v a)
 algRn = A a d p where
-    a :: (Functor f, Functor g, Ord v) => (Rename v :+: f) (CarrierRn f g v a n) -> CarrierRn f g v a n
-    a (Name v fk) = Rn $ do
+    a :: (Functor f, Functor g, Ord v) => (Fresh v :+: f) (CarrierRn f g v a n) -> CarrierRn f g v a n
+    a (Fresh v fk) = Rn $ do
         env <- get
         case Map.lookup v env of
            -- Mapping already exists, so just return it.
@@ -143,14 +135,10 @@ algRn = A a d p where
         let exists = v `Map.member` env
         runRn (fk exists)
 
-    a (Names fk) = Rn $ do
-        env <- getNames
-        runRn (fk env)
-
     a (Other op) = Rn (Op (fmap runRn (R (R op))))
 
-    d :: (Functor f, Functor g, Ord v) => (LocalName v :+: g) (CarrierRn f g  v a ('S n)) -> CarrierRn f g v a n
-    d (Local vs k) = Rn $ do
+    d :: (Functor f, Functor g, Ord v) => (Rename v :+: g) (CarrierRn f g  v a ('S n)) -> CarrierRn f g v a n
+    d (Rename vs k) = Rn $ do
         saved <- getNames
         ins   <- insManyFresh vs
 
@@ -173,17 +161,17 @@ algRn = A a d p where
     p :: (Functor f, Functor g) => CarrierRn f g v a n -> CarrierRn f g v a ('S n)
     p (Rn runRn) = Rn (return (CS runRn))
 
-mkCtx :: (Functor f, Functor g, Ord v) => Prog (Rename v :+: f) (LocalName v :+: g) a -> Ctx f g v a
+mkCtx :: (Functor f, Functor g, Ord v) => Prog (Fresh v :+: f) (Rename v :+: g) a -> Ctx f g v a
 mkCtx prog = case run genRn algRn prog of
     (Rn prog') -> do
         (CZ x) <- prog'
         return x
 
-handleRename :: (Functor f, Functor g, Ord v) => Prog (Rename v :+: f) (LocalName v :+: g) a -> Prog f g a
+handleRename :: (Functor f, Functor g, Ord v) => Prog (Fresh v :+: f) (Rename v :+: g) a -> Prog f g a
 handleRename prog = do
     -- Discard resulting Names, and next fresh.
     -- The fresh is global, indicated by wrapping around the state. Therefore,
     -- getting a new fresh inside scoped state still gives a globally fresh
     -- value.
-    ((x, st), fresh) <- (handleFresh 0 . handleState emptyNames . mkCtx) prog
+    ((x, st), fresh) <- (F.handleFresh 0 . handleState emptyNames . mkCtx) prog
     return x
