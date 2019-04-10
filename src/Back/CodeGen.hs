@@ -282,6 +282,12 @@ varValType :: SrcVar -> GlobalMeta -> (v -> ValType v)
 varValType var meta | var `Set.member` (dirtyVars meta) = Ptr
                     | otherwise                         = Val
 
+lookupFuncVarLocs :: SrcProc -> GlobalMeta -> (SrcLocalVars, SrcParamVars)
+lookupFuncVarLocs pname meta =
+    case Map.lookup pname (funcVarLocs meta) of
+        Nothing   -> error ("No procedure named: " ++ show pname)
+        Just locs -> locs
+
 --------------------------------------------------------------------------------
 -- Semantics
 --------------------------------------------------------------------------------
@@ -348,15 +354,23 @@ alg = A a d p where
     d :: (Functor f, Functor g) => (Block :+: g) (Carrier f g a ('S n)) -> Carrier f g a n
     d (Block k) = Nest $ do
         funcs <- get
-        NS k' <- localSt (pushWorkingFunc [] funcs) (runNest k)
+
+        let emptyInstr = return ()
+            funcs'     = modifyWorkingFunc (pushBlock emptyInstr) funcs
+
+        NS k' <- localSt funcs' (runNest k)
         k'
 
     d (Function pname doesRet k) = Nest $ do
-        let funcMeta = undefined :: FuncMeta
-            workingFuncs = undefined :: WorkingFuncs
+        globalMeta <- askGlobalMeta
+
+        let (locals, params) = lookupFuncVarLocs pname globalMeta
+            spOffsets        = undefined
+            funcMeta         = FuncMeta (wasmName pname) doesRet spOffsets locals params :: FuncMeta
+            workingFuncs     = undefined :: WorkingFuncs
 
         NS k' <- localR funcMeta (do
-            put workingFuncs
+            modify (pushWorkingFunc [])
             k' <- runNest k
             modify (completeWorkingFunc funcMeta)
             return k')
