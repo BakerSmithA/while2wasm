@@ -10,6 +10,7 @@ import Transform.Rename.RenameEffSpec
 import Transform.Rename.RenameSpec
 import Transform.Capture.LocationEffSpec
 import Transform.Capture.DirtyEffSpec
+import Transform.Capture.DirtySpec
 
 main :: IO ()
 main = hspec specs where
@@ -23,3 +24,4 @@ main = hspec specs where
         renameSpec
         locationEffSpec
         dirtyEffSpec
+        dirtySpec

@@ -46,6 +46,11 @@ instance FreeAlg (BlockStm v p) (Ctx v) where
         -- Because Ctx acts like a writer, mapM here writes out results without
         -- needing to explicitly collect them.
         --
+        -- By saying variables declared were modified, it ensures that if
+        -- the variables are modified inside any procedures then they will be
+        -- marked as dirty.
+        mapM (modified . fst) varDecls
+
         -- modScope . snd places body of each procedure inside modScope block.
         -- Therefore, if a variable is seen to be modified in this scope and
         -- inside block, the variable will be marked as dirty.
