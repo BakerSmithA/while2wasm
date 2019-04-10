@@ -138,8 +138,9 @@ data Control k
     | LOOP k
     deriving Functor
 
-type Op     = Instr :+: ArithInstr :+: VarInstr :+: MemInstr :+: BranchInstr
-type WASM a = Prog Op Control a
+type Op   = Instr :+: ArithInstr :+: VarInstr :+: MemInstr :+: BranchInstr
+type Sc   = Control
+type WASM = Prog Op Sc ()
 
 type DoesRet = Bool
 
@@ -148,7 +149,7 @@ data Func = Func {
   , doesRet :: DoesRet
   , locals  :: [LocalName]
   , params  :: [LocalName]
-  , body    :: WASM ()
+  , body    :: WASM
 }
 
 data Mutability
@@ -177,56 +178,56 @@ data Module = Module {
 
 -- Smart constructors
 
-nop :: WASM ()
+nop :: WASM
 nop = injectP (NOP (Var ()))
 
-constNum :: Integer -> WASM ()
+constNum :: Integer -> WASM
 constNum i = injectP (CONST i (Var ()))
 
-uniOp :: UniOp -> WASM ()
+uniOp :: UniOp -> WASM
 uniOp NOT = do constNum 1; relOp EQU
 
-binOp :: BinOp -> WASM ()
+binOp :: BinOp -> WASM
 binOp op = injectP (BIN_OP op (Var ()))
 
-relOp :: RelOp -> WASM ()
+relOp :: RelOp -> WASM
 relOp op = injectP (REL_OP op (Var ()))
 
-getLocal :: LocalName -> WASM ()
+getLocal :: LocalName -> WASM
 getLocal name = injectP (GET_LOCAL name (Var ()))
 
-setLocal :: LocalName -> WASM ()
+setLocal :: LocalName -> WASM
 setLocal name = injectP (SET_LOCAL name (Var ()))
 
-getGlobal :: GlobalName -> WASM ()
+getGlobal :: GlobalName -> WASM
 getGlobal name = injectP (GET_GLOBAL name (Var ()))
 
-setGlobal :: GlobalName -> WASM ()
+setGlobal :: GlobalName -> WASM
 setGlobal name = injectP (SET_GLOBAL name (Var ()))
 
-load :: MemOffset -> WASM ()
+load :: MemOffset -> WASM
 load offset = injectP (LOAD offset (Var ()))
 
-store :: MemOffset -> WASM ()
+store :: MemOffset -> WASM
 store offset = injectP (STORE offset (Var ()))
 
-br :: Label -> WASM ()
+br :: Label -> WASM
 br label = injectP (BR label (Var ()))
 
-brIf :: Label -> WASM ()
+brIf :: Label -> WASM
 brIf label = injectP (BR_IF label (Var ()))
 
-ret :: WASM ()
+ret :: WASM
 ret = injectP (RET (Var ()))
 
-call :: FuncName -> WASM ()
+call :: FuncName -> WASM
 call name = injectP (CALL name (Var ()))
 
-block :: WASM () -> WASM ()
+block :: WASM -> WASM
 block body = injectPSc (fmap (fmap return) (BLOCK body))
 
-ifElse :: WASM () -> WASM () -> WASM ()
+ifElse :: WASM -> WASM -> WASM
 ifElse t e = injectPSc (fmap (fmap return) (IF t e))
 
-loop :: WASM () -> WASM ()
+loop :: WASM -> WASM
 loop body = injectPSc (fmap (fmap return) (LOOP body))
