@@ -46,10 +46,10 @@ emitSetVar v x = do
 
 instance FreeAlg (ProcStm SrcProc) Carrier where
     alg (Call pname) = do
-        argNames <- callerScopeFuncParams pname
+        (_, paramNames) <- funcVarLocations pname
         -- Because emitting instructions is a side effect, mapM_ emits
         -- all arguments to function.
-        mapM_ (\v -> varType v >>= emitGetVarAsArg) argNames
+        mapM_ (\v -> varType v >>= emitGetVarAsArg) paramNames
         emit (call (wasmName pname))
 
 instance FreeAlg Stm Carrier where

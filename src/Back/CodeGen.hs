@@ -20,7 +20,6 @@ module Back.CodeGen
 , spName
 , varSPOffset
 , funcVarLocations
-, callerScopeFuncParams
 , varType
 , codeBlock
 , function
@@ -30,7 +29,9 @@ module Back.CodeGen
 ) where
 
 import Data.Set (Set)
+import qualified Data.Set as Set
 import Data.Map (Map)
+import qualified Data.Map as Map
 import Transform.Rename.Rename (FreshName)
 import Back.WASM
 import Helper.Scope.Prog
@@ -49,9 +50,9 @@ type SrcVar  = FreshName
 type SrcProc = FreshName
 
 -- Variables local to a function.
-type SrcLocalVars = [SrcVar]
+type SrcLocalVars = Set SrcVar
 -- Variables passed into a function.
-type SrcParamVars = [SrcVar]
+type SrcParamVars = Set SrcVar
 
 -- Whether variable is stored as a value local to a function, or is passed in
 -- as a parameter.
@@ -81,10 +82,6 @@ data Emit k
     -- Get local variables and parameters to a function. Used when creating
     -- function definition.
     | FuncVarLocations' SrcProc ((SrcLocalVars, SrcParamVars) -> k)
-    -- Returns names of arguments to a function, i.e. the variables in
-    -- the **caller** scope that should be pushed onto the stack before calling
-    -- the function.
-    | CallerScopeFuncParams' SrcProc (SrcParamVars -> k)
     -- Returns the type of a variable, in the current function, given its name.
     -- Used to inform how the variable should be accessed.
     | VarType' SrcVar (LocType (ValType SrcVar) -> k)
@@ -118,10 +115,6 @@ varSPOffset v = injectP (VarSPOffset' v Var)
 pattern FuncVarLocations pname fk <- (prj -> Just (FuncVarLocations' pname fk))
 funcVarLocations :: Emit :<: f => SrcProc -> Prog f g (SrcLocalVars, SrcParamVars)
 funcVarLocations pname = injectP (FuncVarLocations' pname Var)
-
-pattern CallerScopeFuncParams pname fk <- (prj -> Just (CallerScopeFuncParams' pname fk))
-callerScopeFuncParams :: Emit :<: f => SrcProc -> Prog f g [SrcVar]
-callerScopeFuncParams pname = injectP (CallerScopeFuncParams' pname Var)
 
 pattern VarType var fk <- (prj -> Just (VarType' var fk))
 varType :: Emit :<: f => SrcVar -> Prog f g (LocType (ValType SrcVar))
@@ -226,6 +219,11 @@ data FuncMeta = FuncMeta {
   , paramVars :: SrcParamVars
 }
 
+-- Return whether varible is a value or parameter.
+varLocType :: SrcVar -> FuncMeta -> (v -> LocType v)
+varLocType v func | v `Set.member` (localVars func) = Local
+                  | otherwise                       = Param
+
 -- State of function generation.
 data WorkingFuncs = WorkingFuncs {
     -- WebAssembly is emitted to function environment on top of stack.
@@ -260,7 +258,15 @@ data GlobalMeta = GlobalMeta {
     globalSPName :: GlobalName
     -- Locations of variables in each procedure.
   , funcVarLocs  :: Map SrcProc (SrcLocalVars, SrcParamVars)
+    -- Whether a variable is modified in some scope, and also in a procedure
+    -- inside the scope.
+  , dirtyVars    :: Set SrcVar
 }
+
+-- Return whether variable is value or pointer.
+varValType :: SrcVar -> GlobalMeta -> (v -> ValType v)
+varValType var meta | var `Set.member` (dirtyVars meta) = Ptr
+                    | otherwise                         = Val
 
 --------------------------------------------------------------------------------
 -- Semantics
@@ -272,35 +278,56 @@ type Ctx f g = Prog (Op f) (Sc g)
 
 type Carrier f g = Nest (Ctx f g)
 
+askFuncMeta :: (Functor f, Functor g) => Ctx f g FuncMeta
+askFuncMeta = ask
+
+askGlobalMeta :: (Functor f, Functor g) => Ctx f g GlobalMeta
+askGlobalMeta = ask
+
 gen :: (Functor f, Functor g) => a -> Carrier f g a 'Z
 gen x = Nest (return (NZ x))
 
 alg :: (Functor f, Functor g) => Alg (Emit :+: f) (Block :+: g) (Carrier f g a)
 alg = A a d p where
     a :: (Functor f, Functor g) => (Emit :+: f) (Carrier f g a n) -> Carrier f g a n
-    a = undefined
+    -- Append instruction to end of current block in current function.
+    a (Emit instr k) = Nest $ do
+        funcs <- get
+        put (modifyWorkingFunc (appendInstr instr) funcs)
+        runNest k
 
-    -- -- Append instruction to end of current block in current function.
-    -- a (Emit instr k) = Nest $ do
-    --     env <- get
-    --     put (modifyWorkingFunc (appendInstr instr) env)
-    --     runNest k
-    --
-    -- -- Get instructions of current block of current function.
-    -- a (CurrInstr fk) = Nest $ do
-    --     env <- get
-    --     let topInstr = peekBlock (workingFunc env)
-    --     runNest (fk topInstr)
-    --
-    -- -- Give continuation name of stack pointer variable.
-    -- a (SPName fk) = Nest $ do
-    --     env <- get
-    --     runNest (fk (globalSPName env))
-    --
-    -- -- Give continuation offset of given variable from the stack pointer.
-    -- a (VarSPOffset var fk) = Nest $ do
-    --     env <- get
-    --     undefined
+    -- Get instructions of current block of current function.
+    a (CurrInstr fk) = Nest $ do
+        funcs <- get
+        let topInstr = peekBlock (workingFunc funcs)
+        runNest (fk topInstr)
+
+    -- Give continuation name of stack pointer variable.
+    a (SPName fk) = Nest $ do
+        globals <- askGlobalMeta
+        runNest (fk (globalSPName globals))
+
+    -- Give continuation offset of given variable from the stack pointer.
+    a (VarSPOffset var fk) = Nest $ do
+        funcMeta <- askFuncMeta
+        case Map.lookup var (varSPOffsets funcMeta) of
+            Nothing     -> error ("No var named: " ++ show var)
+            Just offset -> runNest (fk offset)
+
+    -- Give continuation local variables and parameters to function with given name.
+    a (FuncVarLocations pname fk) = Nest $ do
+        globals <- askGlobalMeta
+        case Map.lookup pname (funcVarLocs globals) of
+            Nothing   -> error ("No function named: " ++ show pname)
+            Just locs -> runNest (fk locs)
+
+    -- Give continuation the type of the supplied variable.
+    a (VarType v fk) = Nest $ do
+        funcMeta   <- askFuncMeta
+        globalMeta <- askGlobalMeta
+
+        let makeVarType = (varLocType v funcMeta) . (varValType v globalMeta)
+        runNest (fk (makeVarType v))
 
     d :: (Functor f, Functor g) => (Block :+: g) (Carrier f g a ('S n)) -> Carrier f g a n
     d = undefined
