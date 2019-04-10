@@ -167,7 +167,19 @@ alg = A a d p where
         --
         -- This is to allow foreign variables to be passed through different
         -- scopes. This is required because outputted WASM functions may need to
-        -- pass variables through them.
+        -- pass variables through them. E.g. in example below variable x needs
+        -- to be passed from main WASM function, through f, and into g.
+        --
+        -- begin
+        --   proc f is (
+        --     begin
+        --       prog g is x := 1;
+        --       skip
+        --     end
+        --   );
+        --   skip
+        -- end
+        
         (locals, fors) <- getLocs
         let fors' = fors `Set.union` (Set.difference innerForeigns locals)
         putLocs (locals, fors')
