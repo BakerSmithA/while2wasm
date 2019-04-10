@@ -12,7 +12,10 @@ import Helper.Eff.Void
 type P = Prog (LocOp :+: Void) (DiscardLocals :+: Void)
 
 runP :: P a -> a
-runP = handleVoid . handleLocs
+runP = fst . handleVoid . handleLocs
+
+runPTopLevel :: P a -> Locations
+runPTopLevel = snd . handleVoid . handleLocs
 
 locationEffSpec :: Spec
 locationEffSpec = do
@@ -40,3 +43,7 @@ locationEffSpec = do
         it "after discard block, foreign variables are not added to foreigns if already seen local" $ do
             let p = do addLocal 0; discardLocals (do seen 0; seen 1); getLocations :: P Locations
             runP p `shouldBe` (Set.fromList [0], Set.fromList [1])
+
+        it "also returns locations of variables at top-level" $ do
+            let p = do seen 0; discardLocals (seen 1); seen 2 :: P ()
+            runPTopLevel p `shouldBe` (Set.fromList [0, 2], Set.fromList [1])

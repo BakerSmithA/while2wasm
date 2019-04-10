@@ -30,22 +30,22 @@ data RenameErr = UndefinedProc Ident deriving (Eq, Show)
 -- Context in which renaming is performed. This provides fresh names and scope
 -- for renaming. Also provides execptions, which are thrown if a procedure has
 -- not been seen before.
-type Op  = Fresh  VarName :+: Fresh  ProcName :+: Throw RenameErr :+: Void
-type Sc  = Rename VarName :+: Rename ProcName :+: Catch RenameErr :+: Void
-type Ctx = Prog Op Sc
+type Op      = Fresh  VarName :+: Fresh  ProcName :+: Throw RenameErr :+: Void
+type Sc      = Rename VarName :+: Rename ProcName :+: Catch RenameErr :+: Void
+type Carrier = Prog Op Sc
 
-instance VarExp FreshName :<: f => FreeAlg (VarExp Ident) (Ctx (Free f a)) where
+instance VarExp FreshName :<: f => FreeAlg (VarExp Ident) (Carrier (Free f a)) where
     alg (GetVar v) = do
         v' <- fresh (VarName v)
         return (getVar v')
 
-instance AExp :<: f => FreeAlg AExp (Ctx (Free f a)) where
+instance AExp :<: f => FreeAlg AExp (Carrier (Free f a)) where
     alg (Num n)   = return (num n)
     alg (Add x y) = add <$> x <*> y
     alg (Sub x y) = sub <$> x <*> y
     alg (Mul x y) = mul <$> x <*> y
 
-instance BExp :<: f => FreeAlg BExp (Ctx (Free f a)) where
+instance BExp :<: f => FreeAlg BExp (Carrier (Free f a)) where
     alg (T)       = return true
     alg (F)       = return false
     alg (Equ x y) = equ  <$> x <*> y
@@ -53,7 +53,7 @@ instance BExp :<: f => FreeAlg BExp (Ctx (Free f a)) where
     alg (And x y) = andB <$> x <*> y
     alg (Not x)   = notB <$> x
 
-instance VarStm FreshName :<: f => FreeAlg (VarStm Ident) (Ctx (Free f a)) where
+instance VarStm FreshName :<: f => FreeAlg (VarStm Ident) (Carrier (Free f a)) where
     alg (SetVar v x) = do
         v' <- fresh (VarName v)
         rnX <- x
@@ -61,7 +61,7 @@ instance VarStm FreshName :<: f => FreeAlg (VarStm Ident) (Ctx (Free f a)) where
 
 -- Renames procedure names and checks that the procedure has been seen before.
 -- Acts as a demonstration of execeptions.
-instance ProcStm FreshName :<: f => FreeAlg (ProcStm Ident) (Ctx (Free f a)) where
+instance ProcStm FreshName :<: f => FreeAlg (ProcStm Ident) (Carrier (Free f a)) where
     alg (Call pname) = do
         seenBefore <- exists (ProcName pname)
         if seenBefore
@@ -71,14 +71,14 @@ instance ProcStm FreshName :<: f => FreeAlg (ProcStm Ident) (Ctx (Free f a)) whe
             else
                 throw (UndefinedProc pname)
 
-instance Stm :<: f => FreeAlg Stm (Ctx (Free f a)) where
+instance Stm :<: f => FreeAlg Stm (Carrier (Free f a)) where
     alg (Skip)            = return skip
     alg (Export x)        = export <$> x
     alg (If cond t e)     = ifElse <$> cond <*> t <*> e
     alg (While cond body) = while  <$> cond <*> body
     alg (Comp s1 s2)      = comp   <$> s1   <*> s2
 
-instance BlockStm FreshName FreshName :<: f => FreeAlg (BlockStm Ident Ident) (Ctx (Free f a)) where
+instance BlockStm FreshName FreshName :<: f => FreeAlg (BlockStm Ident Ident) (Carrier (Free f a)) where
     alg (Block varDecls procDecls body) = do
         rename (map VarName (fsts varDecls)) $ do
             rename (map ProcName (fsts procDecls)) $ do
@@ -87,9 +87,9 @@ instance BlockStm FreshName FreshName :<: f => FreeAlg (BlockStm Ident Ident) (C
                 rnBody      <- body
                 return (block rnVarDecls rnProcDecls rnBody)
 
-makeRename :: (Functor g, FreeAlg f (Ctx (Free g a))) => Free f a -> Ctx (Free g a)
+makeRename :: (Functor g, FreeAlg f (Carrier (Free g a))) => Free f a -> Carrier (Free g a)
 makeRename = evalF (return . return)
 
-renameAST :: (Functor g, FreeAlg f (Ctx (Free g a))) => Free f a -> Either RenameErr (Free g a)
+renameAST :: (Functor g, FreeAlg f (Carrier (Free g a))) => Free f a -> Either RenameErr (Free g a)
 -- Handle renaming variable and procedures.
 renameAST = handleVoid . handleExc . handleRename . handleRename . makeRename

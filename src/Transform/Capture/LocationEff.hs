@@ -185,7 +185,7 @@ makeLoc :: (Functor f, Functor g) => Prog (LocOp :+: f) (DiscardLocals :+: g) a 
 makeLoc prog = case run gen alg prog of
     (Nest prog') -> fmap (\(NZ x) -> x) prog'
 
-handleLocs :: (Functor f, Functor g) => Prog (LocOp :+: f) (DiscardLocals :+: g) a -> Prog f g a
+handleLocs :: (Functor f, Functor g) => Prog (LocOp :+: f) (DiscardLocals :+: g) a -> Prog f g (a, Locations)
 handleLocs prog = do
     ((prog', isLocal), locations) <- (handleState emptyLocations . handleState allLocal . makeLoc) prog
-    return prog'
+    return (prog', locations)
