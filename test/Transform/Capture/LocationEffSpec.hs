@@ -9,22 +9,22 @@ import Helper.Scope.Prog
 import Helper.Co
 import Helper.Eff.Void
 
-type P = Prog (LocOp String :+: Void) (Add String :+: Discard :+: Void)
+type P = Prog (LocOp :+: Void) (AddLocals :+: DiscardLocals :+: Void)
 
 runP :: P a -> a
-runP = handleVoid . handleLoc
+runP = handleVoid . handleLocs
 
 locationEffSpec :: Spec
 locationEffSpec = do
     describe "location effect handler" $ do
         it "makes all variables local at top-level" $ do
-            let p = do seen "x"; seen "y"; getLocations :: P (Locations String)
-            runP p `shouldBe` (Set.fromList ["x", "y"], Set.empty)
+            let p = do seen 0; seen 1; getLocations :: P Locations
+            runP p `shouldBe` (Set.fromList [0, 1], Set.empty)
 
-        -- it "makes variables added using addLocals local to scope" $ do
-        --     let p = do seen "x"; addLocals ["y", "z"] (return ()); getLocations :: P (Map String Location)
-        --     runP p `shouldBe` Map.fromList [("x", Local), ("y", Local), ("z", Local)]
-        --
+        it "makes variables added using addLocals local to scope" $ do
+            let p = do seen 0; addLocals [1, 2] (return ()); getLocations :: P Locations
+            runP p `shouldBe` (Set.fromList [0, 1, 2], Set.empty)
+
         -- it "does not include variables inside discard block" $ do
         --     let p = do seen "x"; discardLocals (seen "y"); seen "z"; getLocations :: P (Map String Location)
         --     runP p `shouldBe` Map.fromList [("x", Local), ("z", Local)]

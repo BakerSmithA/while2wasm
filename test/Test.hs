@@ -8,9 +8,8 @@ import Helper.Eff.ReaderSpec
 import Helper.Eff.WriterSpec
 import Transform.Rename.RenameEffSpec
 import Transform.Rename.RenameSpec
--- import Transform.Capture.LocationEffSpec
--- import Transform.Capture.DirtyEffSpec
--- import Transform.RenameSpec
+import Transform.Capture.LocationEffSpec
+import Transform.Capture.DirtyEffSpec
 
 main :: IO ()
 main = hspec specs where
@@ -19,8 +18,8 @@ main = hspec specs where
         stateSpec
         freshSpec
         readerSpec
+        writerSpec
         renameEffSpec
         renameSpec
-        -- writerSpec
-        -- locationEffSpec
-        -- dirtyEffSpec
+        locationEffSpec
+        dirtyEffSpec

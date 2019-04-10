@@ -47,6 +47,9 @@ data LocOp k
     = Seen' FreshName k
     -- Retrieves the mapping from variable names to locations in the curret scope.
     | GetLocations' (Locations -> k)
+    -- -- Adds a local variable to the environment. Will show up in the set of
+    -- -- local variables for this scope.
+    -- | AddLocal FreshName k
     deriving Functor
 
 data AddLocals k
