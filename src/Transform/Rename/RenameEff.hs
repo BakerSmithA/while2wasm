@@ -165,9 +165,7 @@ alg = A a d p where
 
 mkCtx :: (Functor f, Functor g, Ord v) => Prog (Fresh v :+: f) (Rename v :+: g) a -> Ctx f g v a
 mkCtx prog = case run gen alg prog of
-    (Nest prog') -> do
-        (NZ x) <- prog'
-        return x
+    (Nest prog') -> fmap (\(NZ x) -> x) prog'
 
 handleRename :: (Functor f, Functor g, Ord v) => Prog (Fresh v :+: f) (Rename v :+: g) a -> Prog f g a
 handleRename prog = do

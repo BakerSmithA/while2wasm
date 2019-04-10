@@ -3,7 +3,8 @@
 -- Demonstrates utility of scoping when compiling to a language which has
 -- scoped constructs.
 
-{-# LANGUAGE DeriveFunctor, TypeOperators, FlexibleContexts #-}
+{-# LANGUAGE DeriveFunctor, TypeOperators, FlexibleContexts, GADTs, DataKinds #-}
+{-# LANGUAGE ViewPatterns, PatternSynonyms #-}
 
 module Back.CodeGen
 ( SrcVar
@@ -29,10 +30,13 @@ module Back.CodeGen
 ) where
 
 import Data.Set (Set)
+import Data.Map (Map)
 import Transform.Rename.Rename (FreshName)
 import Back.WASM
 import Helper.Scope.Prog
+import Helper.Scope.Nest
 import Helper.Co
+import Helper.Eff.State
 
 --------------------------------------------------------------------------------
 -- Syntax
@@ -64,65 +68,74 @@ data ValType v
 
 data Emit k
     -- Append an instruction to the end of the current block at innermost scope.
-    = Emit WASM k
+    = Emit' WASM k
     -- Get instructions of innermost scoped block. This is the WebAssembly being
     -- constructed.
-    | CurrInstr (WASM -> k)
+    | CurrInstr' (WASM -> k)
     -- Get name of stack pointer, which can be used to load variables from
     -- function's stack frame.
-    | SPName (GlobalName -> k)
+    | SPName' (GlobalName -> k)
     -- Get offset of a local variable from the stack pointer.
-    | VarSPOffset SrcVar (Word -> k)
+    | VarSPOffset' SrcVar (Word -> k)
     -- Get local variables and parameters to a function. Used when creating
     -- function definition.
-    | FuncVarLocations SrcProc ((SrcLocalVars, SrcParamVars) -> k)
+    | FuncVarLocations' SrcProc ((SrcLocalVars, SrcParamVars) -> k)
     -- Returns names of arguments to a function, i.e. the variables in
     -- the **caller** scope that should be pushed onto the stack before calling
     -- the function.
-    | CallerScopeFuncParams SrcProc (SrcParamVars -> k)
+    | CallerScopeFuncParams' SrcProc (SrcParamVars -> k)
     -- Returns the type of a variable, in the current function, given its name.
     -- Used to inform how the variable should be accessed.
-    | VarType SrcVar (LocType (ValType SrcVar) -> k)
+    | VarType' SrcVar (LocType (ValType SrcVar) -> k)
     deriving Functor
 
 data Block k
     -- Create a new block of instructions that nested emits will append to.
     -- Once scope is exited, this block will be popped from the stack.
-    = Block k
+    = Block' k
     -- Create a new block of instructions that nested emits will append to.
     -- Once scope is exited, the instructions will be placed in a function.
-    | Function SrcProc SrcLocalVars SrcParamVars DoesRet k
+    | Function' SrcProc DoesRet k
     deriving Functor
 
+pattern Emit instr k <- (prj -> Just (Emit' instr k))
 emit :: Emit :<: f => WASM -> Prog f g ()
-emit i = injectP (Emit i (Var ()))
+emit i = injectP (Emit' i (Var ()))
 
+pattern CurrInstr fk <- (prj -> Just (CurrInstr' fk))
 currInstr :: Emit :<: f => Prog f g WASM
-currInstr = injectP (CurrInstr Var)
+currInstr = injectP (CurrInstr' Var)
 
+pattern SPName fk <- (prj -> Just (SPName' fk))
 spName :: Emit :<: f => Prog f g GlobalName
-spName = injectP (SPName Var)
+spName = injectP (SPName' Var)
 
+pattern VarSPOffset var fk <- (prj -> (Just (VarSPOffset' var fk)))
 varSPOffset :: Emit :<: f => SrcVar -> Prog f g Word
-varSPOffset v = injectP (VarSPOffset v Var)
+varSPOffset v = injectP (VarSPOffset' v Var)
 
+pattern FuncVarLocations pname fk <- (prj -> Just (FuncVarLocations' pname fk))
 funcVarLocations :: Emit :<: f => SrcProc -> Prog f g (SrcLocalVars, SrcParamVars)
-funcVarLocations pname = injectP (FuncVarLocations pname Var)
+funcVarLocations pname = injectP (FuncVarLocations' pname Var)
 
+pattern CallerScopeFuncParams pname fk <- (prj -> Just (CallerScopeFuncParams' pname fk))
 callerScopeFuncParams :: Emit :<: f => SrcProc -> Prog f g [SrcVar]
-callerScopeFuncParams pname = injectP (CallerScopeFuncParams pname Var)
+callerScopeFuncParams pname = injectP (CallerScopeFuncParams' pname Var)
 
+pattern VarType var fk <- (prj -> Just (VarType' var fk))
 varType :: Emit :<: f => SrcVar -> Prog f g (LocType (ValType SrcVar))
-varType v = injectP (VarType v Var)
+varType v = injectP (VarType' v Var)
 
 -- Returns instructions emitted in the block allowing them to be wrapped up
 -- in a WASM control structure, e.g. BLOCK.
+pattern Block k <- (prj -> Just (Block' k))
 codeBlock :: (Functor f, Emit :<: f, Block :<: g) => Prog f g () -> Prog f g WASM
-codeBlock inner = injectPSc (fmap (fmap return) (Block (do inner; currInstr)))
+codeBlock inner = injectPSc (fmap (fmap return) (Block' (do inner; currInstr)))
 
 -- Emits nested instructions to a new function.
-function :: (Functor f, Block :<: g) => SrcProc -> SrcLocalVars -> SrcParamVars -> DoesRet -> Prog f g a -> Prog f g a
-function name locals params ret body = injectPSc (fmap (fmap return) (Function name locals params ret body))
+pattern Function fname doesRet body <- (prj -> Just (Function' fname doesRet body))
+function :: (Functor f, Block :<: g) => SrcProc -> DoesRet -> Prog f g a -> Prog f g a
+function name ret body = injectPSc (fmap (fmap return) (Function' name ret body))
 
 --------------------------------------------------------------------------------
 -- Convenience functions to make converting from While easier
@@ -172,3 +185,59 @@ emitSetPtr addr val = do addr; val; emit (store 0)
 --------------------------------------------------------------------------------
 -- Semantics
 --------------------------------------------------------------------------------
+
+-- Stores state about a function to which instructions can emitted to.
+data FuncEnv = FuncEnv {
+    -- Name of the function in source code.
+    name :: FuncName
+    -- Whether the function returns a value
+  , doesRet :: Bool
+    -- WebAssembly is appended to WASM on top of stack, i.e. using (>>=)
+  , instrStack :: [WASM]
+    -- Offsets to SP, of variables local to this function, which are stored
+    -- on the stack.
+  , varSPOffsets :: Map SrcVar Word
+    -- List of variables local to this function.
+  , localVars :: SrcLocalVars
+    -- Variables passed in as parameters to this function.
+  , paramVars :: SrcParamVars
+}
+
+-- Stores state about global code generation.
+data Env = Env {
+    -- WebAssembly is emitted to function environment on top of stack.
+    workingFuncs :: [FuncEnv]
+    -- Functions which have finished being emitted.
+  , completeFuncs :: [Func]
+    -- Name of global variable used as SP.
+  , globalSPName :: GlobalName
+    -- Locations of variables in each procedure.
+  , funcVarLocs  :: Map SrcProc (SrcLocalVars, SrcParamVars)
+}
+
+type Op  f   = State   Env :+: f
+type Sc  g   = LocalSt Env :+: g
+type Ctx f g = Prog (Op f) (Sc g)
+
+type Carrier f g = Nest (Ctx f g)
+
+gen :: (Functor f, Functor g) => a -> Carrier f g a 'Z
+gen x = Nest (return (NZ x))
+
+alg :: (Functor f, Functor g) => Alg (Emit :+: f) (Block :+: g) (Carrier f g a)
+alg = A a d p where
+    a :: (Functor f, Functor g) => (Emit :+: f) (Carrier f g a n) -> Carrier f g a n
+    a (Emit instr k) = undefined
+
+    d :: (Functor f, Functor g) => (Block :+: g) (Carrier f g a ('S n)) -> Carrier f g a n
+    d = undefined
+
+    p :: (Functor f, Functor g) => Carrier f g a n -> Carrier f g a ('S n)
+    p = undefined
+
+mkCtx :: (Functor f, Functor g) => Prog (Emit :+: f) (Block :+: g) a -> Ctx f g a
+mkCtx prog = case run gen alg prog of
+    (Nest prog') -> fmap (\(NZ x) -> x) prog'
+
+handleCodeGen :: (Functor f, Functor g) => Prog (Emit :+: f) (Block :+: g) a -> Prog f g (a, Module)
+handleCodeGen = undefined

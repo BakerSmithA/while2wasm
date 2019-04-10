@@ -83,6 +83,4 @@ instance FreeAlg (BlockStm SrcVar SrcProc) Carrier where
         body
 
 emitFunc :: SrcProc -> Carrier -> Carrier
-emitFunc pname body = do
-    (locals, params) <- funcVarLocations pname
-    function pname locals params False body
+emitFunc pname body = function pname False body
