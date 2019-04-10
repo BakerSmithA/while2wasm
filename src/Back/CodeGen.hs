@@ -33,12 +33,13 @@ import qualified Data.Set as Set
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Transform.Rename.Rename (FreshName)
-import Back.WASM
+import Back.WASM hiding (name, doesRet)
 import Helper.Scope.Prog
 import Helper.Scope.Nest
 import Helper.Co
 import Helper.Eff.State
 import Helper.Eff.Reader
+import Helper.Eff
 
 --------------------------------------------------------------------------------
 -- Syntax
@@ -237,12 +238,25 @@ data WorkingFuncs = WorkingFuncs {
 workingFunc :: WorkingFuncs -> InstrBlocks
 workingFunc env = head (workingFuncs env)
 
+pushWorkingFunc :: InstrBlocks -> WorkingFuncs -> WorkingFuncs
+pushWorkingFunc func env = env { workingFuncs=func:(workingFuncs env) }
+
 -- Modify the function environment on top of the stack, e.g. append an instruction.
 modifyWorkingFunc :: (InstrBlocks -> InstrBlocks) -> WorkingFuncs -> WorkingFuncs
 modifyWorkingFunc f env =
     case workingFuncs env of
         []          -> error "No working functions"
         (func:rest) -> env { workingFuncs=(f func):rest }
+
+-- Move current working function to being completed.
+completeWorkingFunc :: FuncMeta -> WorkingFuncs -> WorkingFuncs
+completeWorkingFunc meta env = env' where
+    env'           = env { completeFuncs=completeFuncs', workingFuncs=rest }
+    completeFuncs' = func:(completeFuncs env)
+    func           = Func (name meta) (doesRet meta) locals params (peekBlock block)
+    locals         = map wasmName (Set.elems (localVars meta))
+    params         = map wasmName (Set.elems (paramVars meta))
+    (block:rest)   = workingFuncs env
 
 -- Kept separate from WorkingFuncs so a Reader can be used to access these
 -- variables. This ensures they are not modified accidentally.
@@ -329,11 +343,34 @@ alg = A a d p where
         let makeVarType = (varLocType v funcMeta) . (varValType v globalMeta)
         runNest (fk (makeVarType v))
 
+    a (Other op) = Nest (Op (fmap runNest (R $ R $ R op)))
+
     d :: (Functor f, Functor g) => (Block :+: g) (Carrier f g a ('S n)) -> Carrier f g a n
-    d = undefined
+    d (Block k) = Nest $ do
+        funcs <- get
+        NS k' <- localSt (pushWorkingFunc [] funcs) (runNest k)
+        k'
+
+    d (Function pname doesRet k) = Nest $ do
+        let funcMeta = undefined :: FuncMeta
+            workingFuncs = undefined :: WorkingFuncs
+
+        NS k' <- localR funcMeta (do
+            put workingFuncs
+            k' <- runNest k
+            modify (completeWorkingFunc funcMeta)
+            return k')
+
+        k'
+
+    d (Other op) = Nest (Scope (fmap (\(Nest x) -> fmap f x) (R $ R $ R op))) where
+        f :: (Functor f, Functor g) => Nest' (Ctx f g) a ('S n) -> Ctx f g (Nest' (Ctx f g) a n)
+        f (NS x) = x
 
     p :: (Functor f, Functor g) => Carrier f g a n -> Carrier f g a ('S n)
-    p = undefined
+    p (Nest prog) = Nest $ do
+        x <- prog
+        return (NS (return x))
 
 mkCtx :: (Functor f, Functor g) => Prog (Emit :+: f) (Block :+: g) a -> Ctx f g a
 mkCtx prog = case run gen alg prog of

@@ -10,6 +10,7 @@ module Helper.Eff.State
 , LocalSt
 , get
 , put
+, modify
 , localSt
 , handleState
 ) where
@@ -43,6 +44,11 @@ get = injectP (Get' Var)
 pattern Put s k <- (prj -> Just (Put' s k))
 put :: (Functor f, Functor g, State s :<: f) => s -> Prog f g ()
 put s = injectP (Put' s (Var ()))
+
+modify :: (Functor f, Functor g, State s :<: f) => (s -> s) -> Prog f g ()
+modify f = do
+    env <- get
+    put (f env)
 
 pattern LocalSt s k <- (prj -> Just (LocalSt' s k))
 localSt :: (Functor f, Functor g, LocalSt s :<: g) => s -> Prog f g a -> Prog f g a
