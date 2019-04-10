@@ -5,7 +5,9 @@
 {-# LANGUAGE TypeOperators, FlexibleInstances, MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Transform.Capture.Location where
+module Transform.Capture.Location
+( procVarLocations
+) where
 
 import Data.Map (Map)
 import qualified Data.Map as Map

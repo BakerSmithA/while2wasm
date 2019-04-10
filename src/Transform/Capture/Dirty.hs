@@ -5,7 +5,9 @@
 {-# LANGUAGE TypeOperators, FlexibleInstances, MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Transform.Capture.Dirty (dirtyVars) where
+module Transform.Capture.Dirty
+( dirtyVars
+) where
 
 import Front.AST
 import Transform.Capture.DirtyEff
