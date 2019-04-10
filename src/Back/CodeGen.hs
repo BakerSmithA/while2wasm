@@ -8,14 +8,18 @@
 module Back.CodeGen
 ( SrcVar
 , SrcProc
+, SrcLocalVars
+, SrcParamVars
 , LocType(..)
 , ValType(..)
 , Emit
 , Block
+, wasmName
 , emit
 , spName
 , varSPOffset
-, callerScopeFuncArgs
+, funcVarLocations
+, callerScopeFuncParams
 , varType
 , codeBlock
 , function
@@ -24,6 +28,7 @@ module Back.CodeGen
 , emitSetVarVal
 ) where
 
+import Data.Set (Set)
 import Transform.Rename.Rename (FreshName)
 import Back.WASM
 import Helper.Scope.Prog
@@ -37,6 +42,11 @@ import Helper.Co
 type SrcVar  = FreshName
 -- Type of procedure from source language.
 type SrcProc = FreshName
+
+-- Variables local to a function.
+type SrcLocalVars = [SrcVar]
+-- Variables passed into a function.
+type SrcParamVars = [SrcVar]
 
 -- Whether variable is stored as a value local to a function, or is passed in
 -- as a parameter.
@@ -63,10 +73,13 @@ data Emit k
     | SPName (GlobalName -> k)
     -- Get offset of a local variable from the stack pointer.
     | VarSPOffset SrcVar (Word -> k)
+    -- Get local variables and parameters to a function. Used when creating
+    -- function definition.
+    | FuncVarLocations SrcProc ((SrcLocalVars, SrcParamVars) -> k)
     -- Returns names of arguments to a function, i.e. the variables in
     -- the **caller** scope that should be pushed onto the stack before calling
     -- the function.
-    | CallerScopeFuncArgs SrcProc ([SrcVar] -> k)
+    | CallerScopeFuncParams SrcProc ([SrcVar] -> k)
     -- Returns the type of a variable, in the current function, given its name.
     -- Used to inform how the variable should be accessed.
     | VarType SrcVar (LocType (ValType SrcVar) -> k)
@@ -78,7 +91,7 @@ data Block k
     = Block k
     -- Create a new block of instructions that nested emits will append to.
     -- Once scope is exited, the instructions will be placed in a function.
-    | Function SrcProc [SrcVar] DoesRet k
+    | Function SrcProc SrcLocalVars SrcParamVars DoesRet k
     deriving Functor
 
 emit :: Emit :<: f => WASM -> Prog f g ()
@@ -93,8 +106,11 @@ spName = injectP (SPName Var)
 varSPOffset :: Emit :<: f => SrcVar -> Prog f g Word
 varSPOffset v = injectP (VarSPOffset v Var)
 
-callerScopeFuncArgs :: Emit :<: f => SrcProc -> Prog f g [SrcVar]
-callerScopeFuncArgs pname = injectP (CallerScopeFuncArgs pname Var)
+funcVarLocations :: Emit :<: f => SrcProc -> Prog f g (SrcLocalVars, SrcParamVars)
+funcVarLocations pname = injectP (FuncVarLocations pname Var)
+
+callerScopeFuncParams :: Emit :<: f => SrcProc -> Prog f g [SrcVar]
+callerScopeFuncParams pname = injectP (CallerScopeFuncParams pname Var)
 
 varType :: Emit :<: f => SrcVar -> Prog f g (LocType (ValType SrcVar))
 varType v = injectP (VarType v Var)
@@ -105,8 +121,8 @@ codeBlock :: (Functor f, Emit :<: f, Block :<: g) => Prog f g () -> Prog f g WAS
 codeBlock inner = injectPSc (fmap (fmap return) (Block (do inner; currInstr)))
 
 -- Emits nested instructions to a new function.
-function :: (Functor f, Block :<: g) => SrcProc -> [SrcVar] -> DoesRet -> Prog f g a -> Prog f g a
-function name args ret body = injectPSc (fmap (fmap return) (Function name args ret body))
+function :: (Functor f, Block :<: g) => SrcProc -> SrcLocalVars -> SrcParamVars -> DoesRet -> Prog f g a -> Prog f g a
+function name locals params ret body = injectPSc (fmap (fmap return) (Function name locals params ret body))
 
 --------------------------------------------------------------------------------
 -- Convenience functions to make converting from While easier
