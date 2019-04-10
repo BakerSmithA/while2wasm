@@ -21,6 +21,7 @@ import Control.Monad (mapM_)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Helper.Scope.Prog
+import Helper.Scope.Nest
 import Helper.Pretty
 import Helper.Co
 import Helper.Eff.State
@@ -100,53 +101,47 @@ restoreNames old new = Map.union old new
 -- This ordering of effect handlers ensures the fresh is global, and so
 -- even inside local scope of a state, globally fresh values will be produced.
 -- Also see `handleRename` function.
-type Ctx f g v a = Prog (State (Names v) :+: F.Fresh :+: f) (LocalSt (Names v) :+: g) a
+type Ctx f g v = Prog (State (Names v) :+: F.Fresh :+: f) (LocalSt (Names v) :+: g)
 
--- Need to use carriers using CZ and CS because the state needs to be updated
--- after running local continuation, before running remaining continuation.
-data CarrierRn f g v a n
-    = Rn { runRn :: Ctx f g v (CarrierRn' f g v a n) }
-
-data CarrierRn' f g v a :: Nat -> * where
-    CZ :: a -> CarrierRn' f g v a 'Z
-    CS :: (Ctx f g v (CarrierRn' f g v a n)) -> CarrierRn' f g v a ('S n)
+-- Use Nest to factor out Carrier and Carrier'
+type Carrier f g v = Nest (Ctx f g v)
 
 getNames :: (Functor f, Functor g) => Ctx f g v (Names v)
 getNames = get
 
-genRn :: (Functor f, Functor g) => a -> CarrierRn f g v a 'Z
-genRn x = Rn (return (CZ x))
+genRn :: (Functor f, Functor g) => a -> Carrier f g v a 'Z
+genRn x = Nest (return (NZ x))
 
-algRn :: (Functor f, Functor g, Ord v) => Alg (Fresh v :+: f) (Rename v :+: g) (CarrierRn f g v a)
+algRn :: (Functor f, Functor g, Ord v) => Alg (Fresh v :+: f) (Rename v :+: g) (Carrier f g v a)
 algRn = A a d p where
-    a :: (Functor f, Functor g, Ord v) => (Fresh v :+: f) (CarrierRn f g v a n) -> CarrierRn f g v a n
-    a (Fresh v fk) = Rn $ do
+    a :: (Functor f, Functor g, Ord v) => (Fresh v :+: f) (Carrier f g v a n) -> Carrier f g v a n
+    a (Fresh v fk) = Nest $ do
         env <- get
         case Map.lookup v env of
            -- Mapping already exists, so just return it.
-           Just fresh -> runRn (fk fresh)
+           Just fresh -> runNest (fk fresh)
            -- No mapping exists, so create a new one.
            Nothing -> do
                f <- insFresh v
-               runRn (fk f)
+               runNest (fk f)
 
-    a (Exists v fk) = Rn $ do
+    a (Exists v fk) = Nest $ do
         env <- getNames
         let exists = v `Map.member` env
-        runRn (fk exists)
+        runNest (fk exists)
 
-    a (Other op) = Rn (Op (fmap runRn (R (R op))))
+    a (Other op) = Nest (Op (fmap runNest (R (R op))))
 
-    d :: (Functor f, Functor g, Ord v) => (Rename v :+: g) (CarrierRn f g  v a ('S n)) -> CarrierRn f g v a n
-    d (Rename vs k) = Rn $ do
+    d :: (Functor f, Functor g, Ord v) => (Rename v :+: g) (Carrier f g  v a ('S n)) -> Carrier f g v a n
+    d (Rename vs k) = Nest $ do
         saved <- getNames
         ins   <- insManyFresh vs
 
         -- Run nested continuation with local state.
         -- run' is the continuation remaining after the local continuation.
         -- Before running this the state is restored.
-        (CS run', localEnv) <- localSt ins (do
-            r <- runRn k
+        (NS run', localEnv) <- localSt ins (do
+            r <- runNest k
             e <- getNames
             return (r, e))
 
@@ -154,17 +149,17 @@ algRn = A a d p where
         put (restoreNames saved localEnv)
         run'
 
-    d (Other op) = Rn (Scope (fmap (\(Rn prog) -> fmap f prog) (R op))) where
-        f :: (Functor f, Functor g) => CarrierRn' f g v a ('S n) -> Ctx f g v (CarrierRn' f g v a n)
-        f (CS prog) = prog
+    d (Other op) = Nest (Scope (fmap (\(Nest prog) -> fmap f prog) (R op))) where
+        f :: (Functor f, Functor g) => Nest' (Ctx f g v) a ('S n) -> Ctx f g v (Nest' (Ctx f g v) a n)
+        f (NS prog) = prog
 
-    p :: (Functor f, Functor g) => CarrierRn f g v a n -> CarrierRn f g v a ('S n)
-    p (Rn runRn) = Rn (return (CS runRn))
+    p :: (Functor f, Functor g) => Carrier f g v a n -> Carrier f g v a ('S n)
+    p (Nest runNest) = Nest (return (NS runNest))
 
 mkCtx :: (Functor f, Functor g, Ord v) => Prog (Fresh v :+: f) (Rename v :+: g) a -> Ctx f g v a
 mkCtx prog = case run genRn algRn prog of
-    (Rn prog') -> do
-        (CZ x) <- prog'
+    (Nest prog') -> do
+        (NZ x) <- prog'
         return x
 
 handleRename :: (Functor f, Functor g, Ord v) => Prog (Fresh v :+: f) (Rename v :+: g) a -> Prog f g a
