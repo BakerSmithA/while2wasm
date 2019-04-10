@@ -10,7 +10,6 @@ module Helper.Scope.Alg
 , ScopeAlg(..)
 , Pro
 , eval
-, evalM
 , evalId
 ) where
 
@@ -35,12 +34,6 @@ type Pro a = forall (n :: Nat). a n -> a ('S n)
 eval :: (OpAlg f a, ScopeAlg g a) => (r -> a 'Z) -> Pro a -> Prog f g r -> a 'Z
 eval gen pro = run gen alg' where
     alg' = A alg dem pro
-
--- Like `runM`, except algebra is taken from typeclass.
-evalM :: (Monad m, OpAlg f (CarrierM m a), ScopeAlg g (CarrierM m a)) => Prog f g a -> m a
-evalM = runM alg' where
-    alg' = A alg dem pro
-    pro (M x) = M (return (CSM x))
 
 evalId :: (OpAlg f (CarrierId a), ScopeAlg g (CarrierId a)) => (r -> CarrierId a 'Z) -> Prog f g r -> a
 evalId gen = runId gen alg' where

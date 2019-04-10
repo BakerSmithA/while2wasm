@@ -12,19 +12,20 @@ module Transform.Capture.LocationEff
 , ForeignVars
 , Locations
 , LocOp
-, Add
-, Discard
+, AddLocals
+, DiscardLocals
 , seen
 , getLocations
 , addLocals
 , discardLocals
--- , handleLoc
+, handleLocs
 ) where
 
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Transform.Rename.Rename (FreshName)
 import Helper.Scope.Prog
+import Helper.Scope.Nest
 import Helper.Co
 import Helper.Eff.Reader
 import Helper.Eff.State
@@ -34,8 +35,8 @@ type LocalVars   = Set FreshName
 type ForeignVars = Set FreshName
 type Locations   = (LocalVars, ForeignVars)
 
-emptyLocatons :: Locations
-emptyLocatons = (Set.empty, Set.empty)
+emptyLocations :: Locations
+emptyLocations = (Set.empty, Set.empty)
 
 --------------------------------------------------------------------------------
 -- Syntax
@@ -48,18 +49,18 @@ data LocOp k
     | GetLocations' (Locations -> k)
     deriving Functor
 
-data Add k
+data AddLocals k
     -- Tells environment that variables inside continuation are local.
     -- Also modifies mapping from variables to location to make variables local
     -- at current scope.
-    = Add' [FreshName] k
+    = AddLocals' [FreshName] k
     deriving Functor
 
--- Separated from Add type because no v parameter, so to avoid ambiguous types.
-data Discard k
+-- Separated from AddLocals type because no v parameter, so to avoid ambiguous types.
+data DiscardLocals k
     -- Tells environment that any variables inside continuation should be
     -- treated as foreign, unless overwritten by nested Locals.
-    = Discard' k
+    = DiscardLocals' k
     deriving Functor
 
 pattern Seen v k <- (prj -> Just (Seen' v k))
@@ -70,16 +71,16 @@ pattern GetLocations fk <- (prj -> Just (GetLocations' fk))
 getLocations :: (Functor f, Functor g, LocOp :<: f) => Prog f g Locations
 getLocations = injectP (GetLocations' Var)
 
-pattern Add vs k <- (prj -> Just (Add' vs k))
-addLocals :: (Functor f, Functor g, Add :<: g) => [FreshName] -> Prog f g a -> Prog f g a
-addLocals vs inner = injectPSc (fmap (fmap return) (Add' vs inner))
+pattern AddLocals vs k <- (prj -> Just (AddLocals' vs k))
+addLocals :: (Functor f, Functor g, AddLocals :<: g) => [FreshName] -> Prog f g a -> Prog f g a
+addLocals vs inner = injectPSc (fmap (fmap return) (AddLocals' vs inner))
 
-pattern Discard k <- (prj -> Just (Discard' k))
-discardLocals :: (Functor f, Functor g, Discard :<: g) => Prog f g a -> Prog f g a
-discardLocals inner = injectPSc (fmap (fmap return) (Discard' inner))
+pattern DiscardLocals k <- (prj -> Just (DiscardLocals' k))
+discardLocals :: (Functor f, Functor g, DiscardLocals :<: g) => Prog f g a -> Prog f g a
+discardLocals inner = injectPSc (fmap (fmap return) (DiscardLocals' inner))
 
 --------------------------------------------------------------------------------
--- Semantics
+-- Aux Semantics
 --------------------------------------------------------------------------------
 
 -- Whether a variable was declared at the current scope.
@@ -98,52 +99,91 @@ isLocalFromList vs v = v `Set.member` Set.fromList vs
 orLocal :: IsLocal -> IsLocal -> IsLocal
 orLocal x y v = x v || y v
 
-type Op  f     = Ask    IsLocal :+: State   Locations :+: f
-type Sc  g     = LocalR IsLocal :+: LocalSt Locations :+: g
-type Ctx f g a = Prog (Op f) (Sc g) a
+--------------------------------------------------------------------------------
+-- Semantics
+--------------------------------------------------------------------------------
 
--- data Carrier f g a n
---     = Lc { runL :: Ctx f g (Carrier' f g a n) }
---
--- data Carrier' f g v a :: Nat -> * where
---     CZ :: a -> Carrier' f g v a 'Z
---     CS :: (Ctx f g v (Carrier' f g v a n)) -> Carrier' f g v a ('S n)
---
--- askIsLocal :: (Functor f, Functor g, Ask (IsLocal v) :<: f) => Prog f g (IsLocal v)
--- askIsLocal = ask
---
--- getLocMappings :: (Functor f, Functor g, State (Locations v) :<: f) => Prog f g (Locations v)
--- getLocMappings = get
---
--- putLocMappings :: (Functor f, Functor g, State (Locations v) :<: f) => Locations v -> Prog f g ()
--- putLocMappings = put
---
--- genL :: (Functor f, Functor g) => a -> Carrier f g v a 'Z
--- genL x = Lc (return (CZ x))
---
--- algL :: (Functor f, Functor g, Ord v) => Alg (LocOp v :+: f) (Add v :+: Discard :+: g) (Carrier f g v a)
--- algL = A a d p where
---     a :: (Functor f, Functor g, Ord v) => (LocOp v :+: f) (Carrier f g v a n) -> Carrier f g v a n
---     a (Seen v k) = Lc $ do
---         isLocal <- askIsLocal
---         (locals, foreigns) <- getLocMappings
---         if isLocal v
---             then putLocMappings (Set.insert v locals, foreigns)
---             else putLocMappings (locals, Set.insert v foreigns)
---         runL k
---
---     d :: (Functor f, Functor g, Ord v) => (Add v :+: Discard :+: g) (Carrier f g v a ('S n)) -> Carrier f g v a n
---     d = undefined
---
---     p :: (Functor f, Functor g, Ord v) => Carrier f g v a n -> Carrier f g v a ('S n)
---     p = undefined
---
--- mkLoc :: (Functor f, Functor g, Ord v) => Prog (LocOp v :+: f) (Add v :+: Discard :+: g) a -> Ctx f g v a
--- mkLoc prog = case run genL algL prog of
---     (Lc prog') -> do
---         (CZ x) <- prog'
---         return x
---
--- -- Returns result and mapping from variable names to locations at the top level scope.
--- handleLoc :: (Functor f, Functor g, Ord v) => Prog (LocOp v :+: f) (Add v :+: Discard :+: g) a -> Prog f g a
--- handleLoc = fmap fst . handleState emptyLocatons . handleReader allLocal . mkLoc
+type Op  f   = Ask    IsLocal :+: State   Locations :+: f
+type Sc  g   = LocalR IsLocal :+: LocalSt Locations :+: g
+type Ctx f g = Prog (Op f) (Sc g)
+
+type Carrier f g = Nest (Ctx f g)
+
+askIsLocal :: (Functor f, Functor g) => Ctx f g IsLocal
+askIsLocal = ask
+
+getLocs :: (Functor f, Functor g) => Ctx f g Locations
+getLocs = get
+
+putLocs :: (Functor f, Functor g) => Locations -> Ctx f g ()
+putLocs = put
+
+gen :: (Functor f, Functor g) => a -> Carrier f g a 'Z
+gen x = Nest (return (NZ x))
+
+alg :: (Functor f, Functor g) => Alg (LocOp :+: f) (AddLocals :+: DiscardLocals :+: g) (Carrier f g a)
+alg = A a d p where
+    a :: (Functor f, Functor g) => (LocOp :+: f) (Carrier f g a n) -> Carrier f g a n
+    -- Insert a seen variable into either the local or foreign set.
+    a (Seen v k) = Nest $ do
+        isLocal <- askIsLocal
+        (locals, fors) <- getLocs
+        if isLocal v
+            then putLocs (Set.insert v locals, fors)
+            else putLocs (locals, Set.insert v fors)
+        runNest k
+
+    -- Supply the current local and foreign variables to the continuation.
+    a (GetLocations fk) = Nest $ do
+        locs <- getLocs
+        runNest (fk locs)
+
+    -- Inject op into `f` in `Op f`. Cannot use `injectP` because the types
+    -- cannot be deduced.
+    a (Other op) = Nest (Op (fmap runNest (R $ R op)))
+
+    d :: (Functor f, Functor g) => (AddLocals :+: DiscardLocals :+: g) (Carrier f g a ('S n)) -> Carrier f g a n
+    -- Inside scope, local variables are added to set of local variables.
+    -- Querying whether one of the variables is local (i.e. using IsLocal) will
+    -- also return true.
+    d (AddLocals vs k) = Nest $ do
+        isLocal <- askIsLocal
+        let isLocal' = isLocal `orLocal` isLocalFromList vs
+
+        (locals, fors) <- getLocs
+        let locals'   = Set.union (Set.fromList vs) locals
+            locations = (locals', fors)
+
+        (NS runK', innerForeigns) <- localR isLocal' (do
+            localSt locations (do
+                k' <- runNest k
+                (_, fors) <- getLocs
+                return (k', fors)))
+
+        -- Any variables foreign to the inner scope, are also foreign to this
+        -- scope, unless local to this scope. This is because, variables need
+        -- to be 'passed through' scopes to be made avaiable to lower scopes.
+        let fors' = fors `Set.union` (Set.difference innerForeigns locals)
+        putLocs (locals, fors')
+
+        runK'
+
+    d (DiscardLocals k) = Nest $ do
+        NS runK' <- localR noneLocal (do
+            localSt emptyLocations (
+                runNest k))
+        runK'
+
+    d (Other (Other op)) = Nest (Scope (fmap (\(Nest prog) -> undefined) (R $ R op))) where
+        f :: (Functor f, Functor g) => Nest' (Ctx f g) a ('S n) -> Ctx f g (Nest' (Ctx f g) a n)
+        f (NS prog) = prog
+
+    p :: (Functor f, Functor g) => Carrier f g a n -> Carrier f g a ('S n)
+    p (Nest prog) = Nest (return (NS prog))
+
+makeLoc :: (Functor f, Functor g) => Prog (LocOp :+: f) (AddLocals :+: DiscardLocals :+: g) a -> Ctx f g a
+makeLoc prog = case run gen alg prog of
+    (Nest prog') -> fmap (\(NZ x) -> x) prog'
+
+handleLocs :: (Functor f, Functor g) => Prog (LocOp :+: f) (AddLocals :+: DiscardLocals :+: g) a -> Prog f g a
+handleLocs = fmap fst . handleState emptyLocations . handleReader allLocal . makeLoc

@@ -13,12 +13,9 @@ module Helper.Scope.Prog
 , Nat(..)
 , Alg(..)
 , Progable(..)
-, CarrierM(..)
-, CarrierM'(..)
 , CarrierId(..)
 , fold
 , run
-, runM
 , runId
 ) where
 
@@ -97,27 +94,7 @@ class Progable p f g where
 -- Convenience
 --------------------------------------------------------------------------------
 
--- Covenience carrier for converting Prog trees to be wrapped in monad context.
--- `n` nested monads representing result at each level of scope.
-data CarrierM m a n = M (m (CarrierM' m a n))
-
-data CarrierM' m a :: Nat -> * where
-    CZM :: a -> CarrierM' m a 'Z
-    CSM :: m (CarrierM' m a n) -> CarrierM' m a ('S n)
-
-genM :: (Monad m) => a -> CarrierM m a 'Z
-genM x = M (return (CZM x))
-
-runM :: (Monad m, Functor f, Functor g) => Alg f g (CarrierM m a) -> Prog f g a -> m a
-runM alg prog = case run genM alg prog of
-    (M prog') -> do
-        (CZM x) <- prog'
-        return x
-
-
 -- Carrier with no nesting.
--- TODO: What exactly does this mean?
--- Use if do not care about nesting?
 data CarrierId a (n :: Nat) = Id { unId :: a }
 
 runId :: (Functor f, Functor g) => (r -> CarrierId a 'Z) -> Alg f g (CarrierId a) -> Prog f g r -> a

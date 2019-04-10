@@ -69,7 +69,7 @@ rename :: (Functor f, Functor g, Rename v :<: g) => [v] -> Prog f g a -> Prog f 
 rename vs inner = injectPSc (fmap (fmap return) (Rename' vs inner))
 
 --------------------------------------------------------------------------------
--- Semantics
+-- Aux Semantics
 --------------------------------------------------------------------------------
 
 type Names v = Map v FreshName
@@ -96,12 +96,19 @@ insManyFresh vs = do mapM_ insFresh vs; get
 restoreNames :: Ord v => Names v -> Names v -> Names v
 restoreNames old new = Map.union old new
 
+--------------------------------------------------------------------------------
+-- Semantics
+--------------------------------------------------------------------------------
+
 -- Describe renaming in terms of State and FreshName effect handlers.
 
 -- This ordering of effect handlers ensures the fresh is global, and so
 -- even inside local scope of a state, globally fresh values will be produced.
 -- Also see `handleRename` function.
-type Ctx f g v = Prog (State (Names v) :+: F.Fresh :+: f) (LocalSt (Names v) :+: g)
+
+type Op  f v   = State (Names v)   :+: F.Fresh :+: f
+type Sc  g v   = LocalSt (Names v) :+: g
+type Ctx f g v = Prog (Op f v) (Sc g v)
 
 -- Use Nest to factor out Carrier and Carrier'
 type Carrier f g v = Nest (Ctx f g v)
@@ -109,11 +116,11 @@ type Carrier f g v = Nest (Ctx f g v)
 getNames :: (Functor f, Functor g) => Ctx f g v (Names v)
 getNames = get
 
-genRn :: (Functor f, Functor g) => a -> Carrier f g v a 'Z
-genRn x = Nest (return (NZ x))
+gen :: (Functor f, Functor g) => a -> Carrier f g v a 'Z
+gen x = Nest (return (NZ x))
 
-algRn :: (Functor f, Functor g, Ord v) => Alg (Fresh v :+: f) (Rename v :+: g) (Carrier f g v a)
-algRn = A a d p where
+alg :: (Functor f, Functor g, Ord v) => Alg (Fresh v :+: f) (Rename v :+: g) (Carrier f g v a)
+alg = A a d p where
     a :: (Functor f, Functor g, Ord v) => (Fresh v :+: f) (Carrier f g v a n) -> Carrier f g v a n
     a (Fresh v fk) = Nest $ do
         env <- get
@@ -157,7 +164,7 @@ algRn = A a d p where
     p (Nest runNest) = Nest (return (NS runNest))
 
 mkCtx :: (Functor f, Functor g, Ord v) => Prog (Fresh v :+: f) (Rename v :+: g) a -> Ctx f g v a
-mkCtx prog = case run genRn algRn prog of
+mkCtx prog = case run gen alg prog of
     (Nest prog') -> do
         (NZ x) <- prog'
         return x
