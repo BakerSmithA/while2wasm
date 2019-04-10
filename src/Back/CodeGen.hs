@@ -67,7 +67,7 @@ data ValType v
     deriving (Eq, Show, Functor)
 
 data Emit k
-    -- Append an instruction to the end of the current block at innermost scope.
+    -- Append an instruction to the end of the current block of current function.
     = Emit' WASM k
     -- Get instructions of innermost scoped block. This is the WebAssembly being
     -- constructed.
@@ -238,6 +238,11 @@ data Env = Env {
   , funcVarLocs  :: Map SrcProc (SrcLocalVars, SrcParamVars)
 }
 
+-- Returns the current working function, i.e. function to which WebAssembly
+-- instructions are emitted.
+workingFunc :: Env -> FuncEnv
+workingFunc env = head (workingFuncs env)
+
 -- Modify the function environment on top of the stack, e.g. append an instruction.
 modifyWorkingFunc :: (FuncEnv -> FuncEnv) -> Env -> Env
 modifyWorkingFunc f env =
@@ -261,10 +266,27 @@ gen x = Nest (return (NZ x))
 alg :: (Functor f, Functor g) => Alg (Emit :+: f) (Block :+: g) (Carrier f g a)
 alg = A a d p where
     a :: (Functor f, Functor g) => (Emit :+: f) (Carrier f g a n) -> Carrier f g a n
+    -- Append instruction to end of current block in current function.
     a (Emit instr k) = Nest $ do
         env <- get
         put (modifyWorkingFunc (appendInstr instr) env)
         runNest k
+
+    -- Get instructions of current block of current function.
+    a (CurrInstr fk) = Nest $ do
+        env <- get
+        let topInstr = peekBlock (workingFunc env)
+        runNest (fk topInstr)
+
+    -- Give continuation name of stack pointer variable.
+    a (SPName fk) = Nest $ do
+        env <- get
+        runNest (fk (globalSPName env))
+
+    -- Give continuation offset of given variable from the stack pointer.
+    a (VarSPOffset var fk) = Nest $ do
+        env <- get
+        undefined
 
     d :: (Functor f, Functor g) => (Block :+: g) (Carrier f g a ('S n)) -> Carrier f g a n
     d = undefined
