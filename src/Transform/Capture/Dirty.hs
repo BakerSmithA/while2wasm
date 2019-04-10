@@ -6,7 +6,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Transform.Capture.Dirty
-( dirtyVars
+( DirtyVars
+, dirtyVars
 ) where
 
 import Front.AST

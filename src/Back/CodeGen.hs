@@ -33,6 +33,8 @@ import qualified Data.Set as Set
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Transform.Rename.Rename (FreshName)
+import Transform.Capture.Dirty (DirtyVars)
+import Transform.Capture.Location (Locations)
 import Back.WASM hiding (name, doesRet)
 import Helper.Scope.Prog
 import Helper.Scope.Nest
@@ -258,6 +260,10 @@ completeWorkingFunc meta env = env' where
     params         = map wasmName (Set.elems (paramVars meta))
     (block:rest)   = workingFuncs env
 
+makeModule :: WorkingFuncs -> Module
+makeModule (WorkingFuncs [instr] funcs) = Module funcs' [] [] [] where
+    funcs' = undefined
+
 -- Kept separate from WorkingFuncs so a Reader can be used to access these
 -- variables. This ensures they are not modified accidentally.
 --
@@ -366,8 +372,7 @@ alg = A a d p where
 
         let (locals, params) = lookupFuncVarLocs pname globalMeta
             spOffsets        = undefined
-            funcMeta         = FuncMeta (wasmName pname) doesRet spOffsets locals params :: FuncMeta
-            workingFuncs     = undefined :: WorkingFuncs
+            funcMeta         = FuncMeta (wasmName pname) doesRet spOffsets locals params
 
         NS k' <- localR funcMeta (do
             modify (pushWorkingFunc [])
@@ -390,5 +395,12 @@ mkCtx :: (Functor f, Functor g) => Prog (Emit :+: f) (Block :+: g) a -> Ctx f g 
 mkCtx prog = case run gen alg prog of
     (Nest prog') -> fmap (\(NZ x) -> x) prog'
 
-handleCodeGen :: (Functor f, Functor g) => Prog (Emit :+: f) (Block :+: g) a -> Prog f g (a, Module)
-handleCodeGen = undefined
+handleCodeGen :: (Functor f, Functor g)
+              => Map SrcProc Locations
+              -> DirtyVars SrcVar
+              -> Prog (Emit :+: f) (Block :+: g) a
+              -> Prog f g (a, Module)
+
+handleCodeGen funcVarLocs dirtyVars prog = do
+    (x, workingFuncs) <- (handleReader undefined . handleReader undefined . handleState undefined . mkCtx) prog
+    return (x, makeModule workingFuncs)

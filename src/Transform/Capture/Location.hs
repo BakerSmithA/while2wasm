@@ -6,7 +6,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Transform.Capture.Location
-( procVarLocations
+( Locations
+, procVarLocations
 ) where
 
 import Data.Map (Map)
