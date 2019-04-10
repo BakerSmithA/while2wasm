@@ -21,10 +21,22 @@ locationEffSpec = do
             let p = do seen 0; seen 1; getLocations :: P Locations
             runP p `shouldBe` (Set.fromList [0, 1], Set.empty)
 
-        it "returns variable as foreign if seen is discard block" $ do
+        it "returns variable as foreign if seen inside discard block" $ do
             let p = discardLocals (do seen 0; seen 1; getLocations) :: P Locations
             runP p `shouldBe` (Set.empty, Set.fromList [0, 1])
 
         it "returns variable as local if add local inside discard" $ do
             let p = discardLocals (do addLocal 0; seen 1; getLocations) :: P Locations
+            runP p `shouldBe` (Set.fromList [0], Set.fromList [1])
+
+        it "does nothing if a seen variable has already been added as local" $ do
+            let p = discardLocals (do addLocal 0; seen 0; getLocations) :: P Locations
+            runP p `shouldBe` (Set.fromList [0], Set.empty)
+
+        it "after discard block, foreign variables are added to foreigns of above scope" $ do
+            let p = do discardLocals (seen 0); getLocations :: P Locations
+            runP p `shouldBe` (Set.empty, Set.fromList [0])
+
+        it "after discard block, foreign variables are not added to foreigns if already seen local" $ do
+            let p = do addLocal 0; discardLocals (do seen 0; seen 1); getLocations :: P Locations
             runP p `shouldBe` (Set.fromList [0], Set.fromList [1])

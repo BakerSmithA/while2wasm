@@ -156,9 +156,22 @@ alg = A a d p where
     d :: (Functor f, Functor g) => (DiscardLocals :+: g) (Carrier f g a ('S n)) -> Carrier f g a n
     -- Inside scope there are no local or foreign variables.
     d (DiscardLocals k) = Nest $ do
-        NS runK' <- localSt noneLocal (do
-            localSt emptyLocations (
-                runNest k))
+        (NS runK', innerForeigns) <- localSt noneLocal (do
+            localSt emptyLocations (do
+                k' <- runNest k
+                (_, fors) <- getLocs
+                return (k', fors)))
+
+        -- Add inner foreign variables as foreign variables of outer scope,
+        -- unless outer scope already contains variables as local.
+        --
+        -- This is to allow foreign variables to be passed through different
+        -- scopes. This is required because outputted WASM functions may need to
+        -- pass variables through them.
+        (locals, fors) <- getLocs
+        let fors' = fors `Set.union` (Set.difference innerForeigns locals)
+        putLocs (locals, fors')
+
         runK'
 
     d (Other op) = Nest (Scope (fmap (\(Nest prog) -> fmap f prog) (R $ R op))) where
