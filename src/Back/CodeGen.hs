@@ -183,7 +183,7 @@ emitSetPtr :: (Functor g, Emit :<: f) => Prog f g () -> Prog f g () -> Prog f g 
 emitSetPtr addr val = do addr; val; emit (store 0)
 
 --------------------------------------------------------------------------------
--- Semantics
+-- Aux Semantics
 --------------------------------------------------------------------------------
 
 -- Stores state about a function to which instructions can emitted to.
@@ -203,6 +203,29 @@ data FuncEnv = FuncEnv {
   , paramVars :: SrcParamVars
 }
 
+-- Append instruction to end of innermost scope, i.e. topmost element.
+appendInstr :: WASM -> FuncEnv -> FuncEnv
+appendInstr instr env = env { instrStack=stk' } where
+    stk' = case instrStack env of
+        []         -> [instr]
+        (blk:rest) -> (do blk; instr):rest
+
+-- Returns the WebAssembly currently being built, i.e. at innermost scope.
+peekBlock :: FuncEnv -> WASM
+peekBlock env =
+    case instrStack env of
+        []        -> error "No instruction blocks"
+        (instr:_) -> instr
+
+-- Create a new block of instructions that will be emitted onto the end of.
+pushBlock :: WASM -> FuncEnv -> FuncEnv
+pushBlock instr env = env { instrStack=instr:(instrStack env) }
+
+-- Remove the top block on instructions, meaning instructions will be emitted
+-- onto the top of the tail.
+popBlock :: FuncEnv -> FuncEnv
+popBlock env = env { instrStack=tail (instrStack env) }
+
 -- Stores state about global code generation.
 data Env = Env {
     -- WebAssembly is emitted to function environment on top of stack.
@@ -214,6 +237,17 @@ data Env = Env {
     -- Locations of variables in each procedure.
   , funcVarLocs  :: Map SrcProc (SrcLocalVars, SrcParamVars)
 }
+
+-- Modify the function environment on top of the stack, e.g. append an instruction.
+modifyWorkingFunc :: (FuncEnv -> FuncEnv) -> Env -> Env
+modifyWorkingFunc f env =
+    case workingFuncs env of
+        []          -> error "No working functions"
+        (func:rest) -> env { workingFuncs=(f func):rest }
+
+--------------------------------------------------------------------------------
+-- Semantics
+--------------------------------------------------------------------------------
 
 type Op  f   = State   Env :+: f
 type Sc  g   = LocalSt Env :+: g
@@ -227,7 +261,10 @@ gen x = Nest (return (NZ x))
 alg :: (Functor f, Functor g) => Alg (Emit :+: f) (Block :+: g) (Carrier f g a)
 alg = A a d p where
     a :: (Functor f, Functor g) => (Emit :+: f) (Carrier f g a n) -> Carrier f g a n
-    a (Emit instr k) = undefined
+    a (Emit instr k) = Nest $ do
+        env <- get
+        put (modifyWorkingFunc (appendInstr instr) env)
+        runNest k
 
     d :: (Functor f, Functor g) => (Block :+: g) (Carrier f g a ('S n)) -> Carrier f g a n
     d = undefined
