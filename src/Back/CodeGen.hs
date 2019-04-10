@@ -37,6 +37,7 @@ import Helper.Scope.Prog
 import Helper.Scope.Nest
 import Helper.Co
 import Helper.Eff.State
+import Helper.Eff.Reader
 
 --------------------------------------------------------------------------------
 -- Syntax
@@ -187,13 +188,35 @@ emitSetPtr addr val = do addr; val; emit (store 0)
 --------------------------------------------------------------------------------
 
 -- Stores state about a function to which instructions can emitted to.
-data FuncEnv = FuncEnv {
+type InstrBlocks = [WASM]
+
+-- Append instruction to end of innermost scope, i.e. topmost element.
+appendInstr :: WASM -> InstrBlocks -> InstrBlocks
+appendInstr instr []         = [instr]
+appendInstr instr (blk:rest) = (do blk; instr):rest
+
+-- Returns the WebAssembly currently being built, i.e. at innermost scope.
+peekBlock :: InstrBlocks -> WASM
+peekBlock []        = error "No instruction blocks"
+peekBlock (instr:_) = instr
+
+-- Create a new block of instructions that will be emitted onto the end of.
+pushBlock :: WASM -> InstrBlocks -> InstrBlocks
+pushBlock = (:)
+
+-- Remove the top block on instructions, meaning instructions will be emitted
+-- onto the top of the tail.
+popBlock :: InstrBlocks -> InstrBlocks
+popBlock = tail
+
+-- Metadata about the function which has instructions currently being emitted to.
+-- Kept separate from InstrBlocks so a Reader can be used to access these
+-- variables and ensure they are not modified accidentally.
+data FuncMeta = FuncMeta {
     -- Name of the function in source code.
     name :: FuncName
     -- Whether the function returns a value
   , doesRet :: Bool
-    -- WebAssembly is appended to WASM on top of stack, i.e. using (>>=)
-  , instrStack :: [WASM]
     -- Offsets to SP, of variables local to this function, which are stored
     -- on the stack.
   , varSPOffsets :: Map SrcVar Word
@@ -203,59 +226,48 @@ data FuncEnv = FuncEnv {
   , paramVars :: SrcParamVars
 }
 
--- Append instruction to end of innermost scope, i.e. topmost element.
-appendInstr :: WASM -> FuncEnv -> FuncEnv
-appendInstr instr env = env { instrStack=stk' } where
-    stk' = case instrStack env of
-        []         -> [instr]
-        (blk:rest) -> (do blk; instr):rest
-
--- Returns the WebAssembly currently being built, i.e. at innermost scope.
-peekBlock :: FuncEnv -> WASM
-peekBlock env =
-    case instrStack env of
-        []        -> error "No instruction blocks"
-        (instr:_) -> instr
-
--- Create a new block of instructions that will be emitted onto the end of.
-pushBlock :: WASM -> FuncEnv -> FuncEnv
-pushBlock instr env = env { instrStack=instr:(instrStack env) }
-
--- Remove the top block on instructions, meaning instructions will be emitted
--- onto the top of the tail.
-popBlock :: FuncEnv -> FuncEnv
-popBlock env = env { instrStack=tail (instrStack env) }
-
--- Stores state about global code generation.
-data Env = Env {
+-- State of function generation.
+data WorkingFuncs = WorkingFuncs {
     -- WebAssembly is emitted to function environment on top of stack.
-    workingFuncs :: [FuncEnv]
+    workingFuncs :: [InstrBlocks]
     -- Functions which have finished being emitted.
   , completeFuncs :: [Func]
-    -- Name of global variable used as SP.
-  , globalSPName :: GlobalName
-    -- Locations of variables in each procedure.
-  , funcVarLocs  :: Map SrcProc (SrcLocalVars, SrcParamVars)
 }
 
 -- Returns the current working function, i.e. function to which WebAssembly
 -- instructions are emitted.
-workingFunc :: Env -> FuncEnv
+workingFunc :: WorkingFuncs -> InstrBlocks
 workingFunc env = head (workingFuncs env)
 
 -- Modify the function environment on top of the stack, e.g. append an instruction.
-modifyWorkingFunc :: (FuncEnv -> FuncEnv) -> Env -> Env
+modifyWorkingFunc :: (InstrBlocks -> InstrBlocks) -> WorkingFuncs -> WorkingFuncs
 modifyWorkingFunc f env =
     case workingFuncs env of
         []          -> error "No working functions"
         (func:rest) -> env { workingFuncs=(f func):rest }
 
+-- Kept separate from WorkingFuncs so a Reader can be used to access these
+-- variables. This ensures they are not modified accidentally.
+--
+-- NOTE
+-- This safety is only possible because Emit and Block are transformed into Ctx.
+-- If a normal Carrier was used, and semantics all handled manually, all these
+-- variables would be part of some environment which would act as a state
+-- (like in Syntax and Semantics State example). Therefore allowing the
+-- possiblity of incorrect variables being modified.
+data GlobalMeta = GlobalMeta {
+    -- Name of global variable used as SP.
+    globalSPName :: GlobalName
+    -- Locations of variables in each procedure.
+  , funcVarLocs  :: Map SrcProc (SrcLocalVars, SrcParamVars)
+}
+
 --------------------------------------------------------------------------------
 -- Semantics
 --------------------------------------------------------------------------------
 
-type Op  f   = State   Env :+: f
-type Sc  g   = LocalSt Env :+: g
+type Op  f   = State   WorkingFuncs :+: Ask    FuncMeta :+: Ask    GlobalMeta :+: f
+type Sc  g   = LocalSt WorkingFuncs :+: LocalR FuncMeta :+: LocalR GlobalMeta :+: g
 type Ctx f g = Prog (Op f) (Sc g)
 
 type Carrier f g = Nest (Ctx f g)
@@ -266,27 +278,29 @@ gen x = Nest (return (NZ x))
 alg :: (Functor f, Functor g) => Alg (Emit :+: f) (Block :+: g) (Carrier f g a)
 alg = A a d p where
     a :: (Functor f, Functor g) => (Emit :+: f) (Carrier f g a n) -> Carrier f g a n
-    -- Append instruction to end of current block in current function.
-    a (Emit instr k) = Nest $ do
-        env <- get
-        put (modifyWorkingFunc (appendInstr instr) env)
-        runNest k
+    a = undefined
 
-    -- Get instructions of current block of current function.
-    a (CurrInstr fk) = Nest $ do
-        env <- get
-        let topInstr = peekBlock (workingFunc env)
-        runNest (fk topInstr)
-
-    -- Give continuation name of stack pointer variable.
-    a (SPName fk) = Nest $ do
-        env <- get
-        runNest (fk (globalSPName env))
-
-    -- Give continuation offset of given variable from the stack pointer.
-    a (VarSPOffset var fk) = Nest $ do
-        env <- get
-        undefined
+    -- -- Append instruction to end of current block in current function.
+    -- a (Emit instr k) = Nest $ do
+    --     env <- get
+    --     put (modifyWorkingFunc (appendInstr instr) env)
+    --     runNest k
+    --
+    -- -- Get instructions of current block of current function.
+    -- a (CurrInstr fk) = Nest $ do
+    --     env <- get
+    --     let topInstr = peekBlock (workingFunc env)
+    --     runNest (fk topInstr)
+    --
+    -- -- Give continuation name of stack pointer variable.
+    -- a (SPName fk) = Nest $ do
+    --     env <- get
+    --     runNest (fk (globalSPName env))
+    --
+    -- -- Give continuation offset of given variable from the stack pointer.
+    -- a (VarSPOffset var fk) = Nest $ do
+    --     env <- get
+    --     undefined
 
     d :: (Functor f, Functor g) => (Block :+: g) (Carrier f g a ('S n)) -> Carrier f g a n
     d = undefined
