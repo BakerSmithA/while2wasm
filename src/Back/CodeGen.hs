@@ -79,7 +79,7 @@ data Emit k
     -- Returns names of arguments to a function, i.e. the variables in
     -- the **caller** scope that should be pushed onto the stack before calling
     -- the function.
-    | CallerScopeFuncParams SrcProc ([SrcVar] -> k)
+    | CallerScopeFuncParams SrcProc (SrcParamVars -> k)
     -- Returns the type of a variable, in the current function, given its name.
     -- Used to inform how the variable should be accessed.
     | VarType SrcVar (LocType (ValType SrcVar) -> k)
@@ -168,3 +168,7 @@ emitSetVarVal (Param (Ptr v)) val = emitSetPtr (emit (getLocal (wasmName v))) va
 -- Sets the value pointed to by a pointer.
 emitSetPtr :: (Functor g, Emit :<: f) => Prog f g () -> Prog f g () -> Prog f g ()
 emitSetPtr addr val = do addr; val; emit (store 0)
+
+--------------------------------------------------------------------------------
+-- Semantics
+--------------------------------------------------------------------------------
