@@ -3,13 +3,14 @@
 -- Demonstrates utility of scoping when compiling to a language which has
 -- scoped constructs.
 
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFunctor, TypeOperators, FlexibleContexts #-}
 
 module Back.CodeGen where
 
 import Transform.Rename.Rename (FreshName)
 import Back.WASM
 import Helper.Scope.Prog
+import Helper.Co
 
 --------------------------------------------------------------------------------
 -- Syntax
@@ -63,31 +64,29 @@ data Block k
     | Function SrcProc [SrcVar] DoesRet k
     deriving Functor
 
-type CodeGen = Prog Emit Block
+emit :: Emit :<: f => WASM -> Prog f g ()
+emit i = injectP (Emit i (Var ()))
 
-emit :: WASM -> CodeGen ()
-emit i = Op (Emit i (Var ()))
+currInstr :: Emit :<: f => Prog f g WASM
+currInstr = injectP (CurrInstr Var)
 
-currInstr :: CodeGen (WASM)
-currInstr = Op (CurrInstr Var)
+spName :: Emit :<: f => Prog f g GlobalName
+spName = injectP (SPName Var)
 
-spName :: CodeGen GlobalName
-spName = Op (SPName Var)
+spOffset :: Emit :<: f => SrcVar -> Prog f g Word
+spOffset v = injectP (SPOffset v Var)
 
-spOffset :: SrcVar -> CodeGen Word
-spOffset v = Op (SPOffset v Var)
+callerScopeFuncArgs :: Emit :<: f => SrcProc -> Prog f g [SrcVar]
+callerScopeFuncArgs pname = injectP (CallerScopeFuncArgs pname Var)
 
-callerScopeFuncArgs :: SrcProc -> CodeGen [SrcVar]
-callerScopeFuncArgs fname = Op (CallerScopeFuncArgs fname Var)
-
-varType :: SrcVar -> CodeGen (LocType (ValType SrcVar))
-varType v = Op (VarType v Var)
+varType :: Emit :<: f => SrcVar -> Prog f g (LocType (ValType SrcVar))
+varType v = injectP (VarType v Var)
 
 -- Returns instructions emitted in the block allowing them to be wrapped up
 -- in a WASM control structure, e.g. BLOCK.
-codeBlock :: CodeGen () -> CodeGen WASM
-codeBlock inner = Scope (fmap (fmap return) (CodeBlock (do inner; currInstr)))
+codeBlock :: (Functor f, Emit :<: f, Block :<: g) => Prog f g () -> Prog f g WASM
+codeBlock inner = injectPSc (fmap (fmap return) (Block (do inner; currInstr)))
 
 -- Emits nested instructions to a new function.
-function :: SrcProc -> [SrcVar] -> DoesRet -> CodeGen a -> CodeGen a
-function name args ret body = Scope (fmap (fmap return) (Function name args ret body))
+function :: (Functor f, Block :<: g) => SrcProc -> [SrcVar] -> DoesRet -> Prog f g a -> Prog f g a
+function name args ret body = injectPSc (fmap (fmap return) (Function name args ret body))
