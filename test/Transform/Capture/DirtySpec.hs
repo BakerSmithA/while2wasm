@@ -6,8 +6,6 @@ import Data.Set as Set
 import Test.Hspec
 import Front.AST
 import Transform.Capture.Dirty
-import Helper.Free.Free
-import Helper.Co
 
 type IWhile = While Ident Ident
 
