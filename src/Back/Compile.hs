@@ -3,6 +3,8 @@
 
 module Back.Compile where
 
+import qualified Data.Set as Set
+import qualified Data.Map as Map
 import Front.AST hiding (call, ifElse, block)
 import Back.WASM hiding (Export)
 import Back.CodeGenSyntax
@@ -123,7 +125,13 @@ instance FreeAlg Stm CodeGen where
     --     emit (block wasmBlock)
 
 instance FreeAlg (BlockStm SrcVar SrcProc) CodeGen where
-    alg = undefined
+    alg (Block _ procDecls body) = do
+        mapM_ (uncurry emitFunc) procDecls
+        body
+
+emitFunc :: SrcProc -> CodeGen -> CodeGen
+emitFunc pname body = do
+    function pname False Set.empty Set.empty Map.empty body
 
 mkCodeGen :: FreeAlg f CodeGen => Free f a -> CodeGen
 mkCodeGen = evalF (const (return (return ())))
