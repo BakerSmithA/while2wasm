@@ -6,9 +6,14 @@
 
 module Back.AST where
 
+import Data.Map (Map)
+import qualified Data.Map as Map
 import Front.AST hiding (call, ifElse, block)
 import Back.CodeGen
 import Back.WASM hiding (Export)
+import Transform.Rename.Rename (FreshName)
+import Transform.Capture.Dirty (DirtyVars)
+import Transform.Capture.Location (Locations)
 import Helper.Free.Free
 import Helper.Free.Alg
 import Helper.Scope.Prog
@@ -83,4 +88,21 @@ instance FreeAlg (BlockStm SrcVar SrcProc) Carrier where
         body
 
 emitFunc :: SrcProc -> Carrier -> Carrier
-emitFunc pname body = function pname False body
+emitFunc pname body = do
+    (locals, params) <- funcVarLocations pname
+    let spOffsets = Map.empty
+    function pname False locals params spOffsets body
+
+mkCodeGen :: FreeAlg f Carrier => Free f a -> Carrier
+mkCodeGen = evalF (const (return ()))
+
+compile ::  FreeAlg f Carrier => Map SrcProc Locations -> DirtyVars SrcVar -> Free f a -> Module
+compile funcVarLocs dirtyVars prog = Module funcs globals memories exports where
+    funcs    = undefined
+    globals  = undefined
+    memories = undefined
+    exports  = undefined
+
+    (_, mainWasm, nestedFuncs) = (handleVoid . handle . mkCodeGen) prog
+    handle = handleCodeGen mainFuncMeta "sp" funcVarLocs dirtyVars
+    mainFuncMeta = undefined :: FuncMeta

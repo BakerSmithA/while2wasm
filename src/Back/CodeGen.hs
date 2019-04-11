@@ -15,6 +15,7 @@ module Back.CodeGen
 , ValType(..)
 , Emit
 , Block
+, FuncMeta
 , wasmName
 , emit
 , spName
@@ -26,6 +27,7 @@ module Back.CodeGen
 , emitGetVarAsArg
 , emitGetVarVal
 , emitSetVarVal
+, handleCodeGen
 ) where
 
 import Data.Set (Set)
@@ -405,17 +407,19 @@ mkCtx :: (Functor f, Functor g) => Prog (Emit :+: f) (Block :+: g) a -> Ctx f g 
 mkCtx prog = case run gen alg prog of
     (Nest prog') -> fmap (\(NZ x) -> x) prog'
 
+-- Returns WebAssembly of main function, and WebAssembly functions for any
+-- nested procedures.
 handleCodeGen :: (Functor f, Functor g)
               => FuncMeta
               -> GlobalName
               -> Map SrcProc Locations
               -> DirtyVars SrcVar
               -> Prog (Emit :+: f) (Block :+: g) a
-              -> Prog f g (a, [Func])
+              -> Prog f g (a, WASM, [Func])
 
 handleCodeGen mainFuncMeta spName funcVarLocs dirtyVars prog = do
     let workingFuncs = WorkingFuncs [] []
         globalMeta   = GlobalMeta spName funcVarLocs dirtyVars
 
     (x, workingFuncs) <- (handleReader globalMeta . handleReader mainFuncMeta . handleState workingFuncs . mkCtx) prog
-    return (x, completeFuncs workingFuncs)
+    return (x, peekBlock (workingFunc workingFuncs), completeFuncs workingFuncs)
