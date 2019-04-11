@@ -96,13 +96,16 @@ emitFunc pname body = do
 mkCodeGen :: FreeAlg f Carrier => Free f a -> Carrier
 mkCodeGen = evalF (const (return ()))
 
-compile ::  FreeAlg f Carrier => Map SrcProc Locations -> DirtyVars SrcVar -> Free f a -> Module
-compile funcVarLocs dirtyVars prog = Module funcs globals memories exports where
-    funcs    = undefined
-    globals  = undefined
-    memories = undefined
-    exports  = undefined
+compile ::  FreeAlg f Carrier => Locations -> Map SrcProc Locations -> DirtyVars SrcVar -> Free f a -> Module
+compile mainVarLocs funcVarLocs dirtyVars prog = Module funcs globals memories exports where
+    funcs    = mainFunc:nestedFuncs
+    globals  = []
+    memories = []
+    exports  = []
 
+    mainFunc                   = funcFromMeta mainFuncMeta mainWasm
     (_, mainWasm, nestedFuncs) = (handleVoid . handle . mkCodeGen) prog
-    handle = handleCodeGen mainFuncMeta "sp" funcVarLocs dirtyVars
-    mainFuncMeta = undefined :: FuncMeta
+
+    handle                   = handleCodeGen mainFuncMeta "sp" funcVarLocs dirtyVars
+    mainFuncMeta             = FuncMeta "main" False Map.empty mainLocals mainParams
+    (mainLocals, mainParams) = mainVarLocs

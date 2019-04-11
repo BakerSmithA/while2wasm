@@ -15,7 +15,7 @@ module Back.CodeGen
 , ValType(..)
 , Emit
 , Block
-, FuncMeta
+, FuncMeta(..)
 , wasmName
 , emit
 , spName
@@ -27,6 +27,7 @@ module Back.CodeGen
 , emitGetVarAsArg
 , emitGetVarVal
 , emitSetVarVal
+, funcFromMeta
 , handleCodeGen
 ) where
 
@@ -265,15 +266,18 @@ modifyWorkingFunc f env =
         []          -> env { workingFuncs=[f []] }
         (func:rest) -> env { workingFuncs=(f func):rest }
 
+funcFromMeta :: FuncMeta -> WASM -> Func
+funcFromMeta meta instr = Func (name meta) (doesRet meta) locals params instr where
+    locals = map wasmName (Set.elems (localVars meta))
+    params = map wasmName (Set.elems (paramVars meta))
+
 -- Move current working function to being completed.
 -- Assumes there is only one instruction left in block of intructions for top function.
 completeWorkingFunc :: FuncMeta -> WorkingFuncs -> WorkingFuncs
 completeWorkingFunc meta env = env' where
     env'           = env { completeFuncs=completeFuncs', workingFuncs=rest }
     completeFuncs' = func:(completeFuncs env)
-    func           = Func (name meta) (doesRet meta) locals params (peekBlock block)
-    locals         = map wasmName (Set.elems (localVars meta))
-    params         = map wasmName (Set.elems (paramVars meta))
+    func           = funcFromMeta meta (peekBlock block)
     (block:rest)   = workingFuncs env
 
 -- Kept separate from WorkingFuncs so a Reader can be used to access these
