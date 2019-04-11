@@ -99,7 +99,7 @@ type Op  f   = State   IsLocal :+: State   Locations :+: f
 type Sc  g   = LocalSt IsLocal :+: LocalSt Locations :+: g
 type Ctx f g = Prog (Op f) (Sc g)
 
-type Carrier f g = Nest (Ctx f g)
+type Carrier f g = Nest1 (Ctx f g)
 
 getIsLocal :: (Functor f, Functor g) => Ctx f g IsLocal
 getIsLocal = get
@@ -114,14 +114,14 @@ putLocs :: (Functor f, Functor g) => Locations -> Ctx f g ()
 putLocs = put
 
 gen :: (Functor f, Functor g) => a -> Carrier f g a 'Z
-gen x = Nest (return (NZ x))
+gen x = Nest1 (return (NZ1 x))
 
 alg :: (Functor f, Functor g) => Alg (LocOp :+: f) (DiscardLocals :+: g) (Carrier f g a)
 alg = A a d p where
     a :: (Functor f, Functor g) => (LocOp :+: f) (Carrier f g a n) -> Carrier f g a n
     -- Insert a seen variable into either the local or foreign set depending on
     -- whether it is local to the current scope.
-    a (Seen v k) = Nest $ do
+    a (Seen v k) = Nest1 $ do
         isLocal <- getIsLocal
         (locals, fors) <- getLocs
         -- Cannot only insert into foreign set, because IsLocal returns True
@@ -130,9 +130,9 @@ alg = A a d p where
         if isLocal v
             then putLocs (Set.insert v locals, fors)
             else putLocs (locals, Set.insert v fors)
-        runNest k
+        runNest1 k
 
-    a (AddLocal v k) = Nest $ do
+    a (AddLocal v k) = Nest1 $ do
         isLocal <- getIsLocal
         (locals, fors) <- getLocs
 
@@ -142,23 +142,23 @@ alg = A a d p where
         putIsLocal isLocal'
         putLocs (locals', fors)
 
-        runNest k
+        runNest1 k
 
     -- Supply the current local and foreign variables to the continuation.
-    a (GetLocations fk) = Nest $ do
+    a (GetLocations fk) = Nest1 $ do
         locs <- getLocs
-        runNest (fk locs)
+        runNest1 (fk locs)
 
     -- Manually inject op into `f` in `Op f`. Cannot use `injectP` because the
     -- types cannot be deduced.
-    a (Other op) = Nest (Op (fmap runNest (R $ R op)))
+    a (Other op) = Nest1 (Op (fmap runNest1 (R $ R op)))
 
     d :: (Functor f, Functor g) => (DiscardLocals :+: g) (Carrier f g a ('S n)) -> Carrier f g a n
     -- Inside scope there are no local or foreign variables.
-    d (DiscardLocals k) = Nest $ do
-        (NS runK', innerForeigns) <- localSt noneLocal (do
+    d (DiscardLocals k) = Nest1 $ do
+        (NS1 runK', innerForeigns) <- localSt noneLocal (do
             localSt emptyLocations (do
-                k' <- runNest k
+                k' <- runNest1 k
                 (_, fors) <- getLocs
                 return (k', fors)))
 
@@ -179,23 +179,23 @@ alg = A a d p where
         --   );
         --   skip
         -- end
-        
+
         (locals, fors) <- getLocs
         let fors' = fors `Set.union` (Set.difference innerForeigns locals)
         putLocs (locals, fors')
 
         runK'
 
-    d (Other op) = Nest (Scope (fmap (\(Nest prog) -> fmap f prog) (R $ R op))) where
-        f :: (Functor f, Functor g) => Nest' (Ctx f g) a ('S n) -> Ctx f g (Nest' (Ctx f g) a n)
-        f (NS prog) = prog
+    d (Other op) = Nest1 (Scope (fmap (\(Nest1 prog) -> fmap f prog) (R $ R op))) where
+        f :: (Functor f, Functor g) => Nest1' (Ctx f g) a ('S n) -> Ctx f g (Nest1' (Ctx f g) a n)
+        f (NS1 prog) = prog
 
     p :: (Functor f, Functor g) => Carrier f g a n -> Carrier f g a ('S n)
-    p (Nest prog) = Nest (return (NS prog))
+    p (Nest1 prog) = Nest1 (return (NS1 prog))
 
 makeLoc :: (Functor f, Functor g) => Prog (LocOp :+: f) (DiscardLocals :+: g) a -> Ctx f g a
 makeLoc prog = case run gen alg prog of
-    (Nest prog') -> fmap (\(NZ x) -> x) prog'
+    (Nest1 prog') -> fmap (\(NZ1 x) -> x) prog'
 
 handleLocs :: (Functor f, Functor g) => Prog (LocOp :+: f) (DiscardLocals :+: g) a -> Prog f g (a, Locations)
 handleLocs prog = do

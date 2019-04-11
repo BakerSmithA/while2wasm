@@ -6,12 +6,21 @@
 module Helper.Scope.Nest
 ( Nest(..)
 , Nest'(..)
+, Nest1(..)
+, Nest1'(..)
 ) where
 
 import Helper.Scope.Prog
 
-data Nest f a n = Nest { runNest :: f (Nest' f a n) }
+-- TODO: Unify these.
+data Nest f n = Nest { runNest :: f (Nest' f n) }
 
-data Nest' f a :: Nat -> * where
-    NZ :: a -> Nest' f a 'Z
-    NS :: f (Nest' f a n) -> Nest' f a ('S n)
+data Nest' f :: Nat -> * where
+    NZ :: a -> Nest' f 'Z
+    NS :: f (Nest' f n) -> Nest' f ('S n)
+
+data Nest1 f a n = Nest1 { runNest1 :: f (Nest1' f a n) }
+
+data Nest1' f a :: Nat -> * where
+    NZ1 :: a -> Nest1' f a 'Z
+    NS1 :: f (Nest1' f a n) -> Nest1' f a ('S n)

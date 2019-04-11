@@ -318,7 +318,7 @@ type Op  f   = State   WorkingFuncs :+: Ask    FuncMeta :+: Ask    GlobalMeta :+
 type Sc  g   = LocalSt WorkingFuncs :+: LocalR FuncMeta :+: LocalR GlobalMeta :+: g
 type Ctx f g = Prog (Op f) (Sc g)
 
-type Carrier f g = Nest (Ctx f g)
+type Carrier f g = Nest1 (Ctx f g)
 
 askFuncMeta :: (Functor f, Functor g) => Ctx f g FuncMeta
 askFuncMeta = ask
@@ -327,70 +327,70 @@ askGlobalMeta :: (Functor f, Functor g) => Ctx f g GlobalMeta
 askGlobalMeta = ask
 
 gen :: (Functor f, Functor g) => a -> Carrier f g a 'Z
-gen x = Nest (return (NZ x))
+gen x = Nest1 (return (NZ1 x))
 
 alg :: (Functor f, Functor g) => Alg (Emit :+: f) (Block :+: g) (Carrier f g a)
 alg = A a d p where
     a :: (Functor f, Functor g) => (Emit :+: f) (Carrier f g a n) -> Carrier f g a n
     -- Append instruction to end of current block in current function.
-    a (Emit instr k) = Nest $ do
+    a (Emit instr k) = Nest1 $ do
         funcs <- get
         put (modifyWorkingFunc (appendInstr instr) funcs)
-        runNest k
+        runNest1 k
 
     -- Get instructions of current block of current function.
-    a (CurrInstr fk) = Nest $ do
+    a (CurrInstr fk) = Nest1 $ do
         funcs <- get
         let topInstr = peekBlock (workingFunc funcs)
-        runNest (fk topInstr)
+        runNest1 (fk topInstr)
 
     -- Give continuation name of stack pointer variable.
-    a (SPName fk) = Nest $ do
+    a (SPName fk) = Nest1 $ do
         globals <- askGlobalMeta
-        runNest (fk (globalSPName globals))
+        runNest1 (fk (globalSPName globals))
 
     -- Give continuation offset of given variable from the stack pointer.
-    a (VarSPOffset var fk) = Nest $ do
+    a (VarSPOffset var fk) = Nest1 $ do
         funcMeta <- askFuncMeta
         case Map.lookup var (varSPOffsets funcMeta) of
             Nothing     -> error ("No var named: " ++ show var)
-            Just offset -> runNest (fk offset)
+            Just offset -> runNest1 (fk offset)
 
     -- Give continuation local variables and parameters to function with given name.
-    a (FuncVarLocations pname fk) = Nest $ do
+    a (FuncVarLocations pname fk) = Nest1 $ do
         globals <- askGlobalMeta
         case Map.lookup pname (funcVarLocs globals) of
             Nothing   -> error ("No function named: " ++ show pname)
-            Just locs -> runNest (fk locs)
+            Just locs -> runNest1 (fk locs)
 
     -- Give continuation the type of the supplied variable.
-    a (VarType v fk) = Nest $ do
+    a (VarType v fk) = Nest1 $ do
         funcMeta   <- askFuncMeta
         globalMeta <- askGlobalMeta
 
         let makeVarType = (varLocType v funcMeta) . (varValType v globalMeta)
-        runNest (fk (makeVarType v))
+        runNest1 (fk (makeVarType v))
 
-    a (Other op) = Nest (Op (fmap runNest (R $ R $ R op)))
+    a (Other op) = Nest1 (Op (fmap runNest1 (R $ R $ R op)))
 
     d :: (Functor f, Functor g) => (Block :+: g) (Carrier f g a ('S n)) -> Carrier f g a n
-    d (Block k) = Nest $ do
+    d (Block k) = Nest1 $ do
         funcs <- get
 
         let emptyInstr = return ()
             funcs'     = modifyWorkingFunc (pushBlock emptyInstr) funcs
 
-        NS k' <- localSt funcs' (runNest k)
+        NS1 k' <- localSt funcs' (runNest1 k)
         k'
 
-    d (Function pname ret locals params spOffsets k) = Nest $ do
+    d (Function pname ret locals params spOffsets k) = Nest1 $ do
         let funcMeta = FuncMeta (wasmName pname) ret spOffsets locals params
 
-        NS k' <- localR funcMeta (do
+        NS1 k' <- localR funcMeta (do
             -- Create a new function that instructions will be emitted to.
             -- The function currently contains an empty stack of instructions.
             modify (pushWorkingFunc [])
-            k' <- runNest k
+            k' <- runNest1 k
             -- All instructions have been added to the function, create a
             -- WebAssembly function.
             modify (completeWorkingFunc funcMeta)
@@ -398,18 +398,18 @@ alg = A a d p where
 
         k'
 
-    d (Other op) = Nest (Scope (fmap (\(Nest x) -> fmap f x) (R $ R $ R op))) where
-        f :: (Functor f, Functor g) => Nest' (Ctx f g) a ('S n) -> Ctx f g (Nest' (Ctx f g) a n)
-        f (NS x) = x
+    d (Other op) = Nest1 (Scope (fmap (\(Nest1 x) -> fmap f x) (R $ R $ R op))) where
+        f :: (Functor f, Functor g) => Nest1' (Ctx f g) a ('S n) -> Ctx f g (Nest1' (Ctx f g) a n)
+        f (NS1 x) = x
 
     p :: (Functor f, Functor g) => Carrier f g a n -> Carrier f g a ('S n)
-    p (Nest prog) = Nest $ do
+    p (Nest1 prog) = Nest1 $ do
         x <- prog
-        return (NS (return x))
+        return (NS1 (return x))
 
 mkCtx :: (Functor f, Functor g) => Prog (Emit :+: f) (Block :+: g) a -> Ctx f g a
 mkCtx prog = case run gen alg prog of
-    (Nest prog') -> fmap (\(NZ x) -> x) prog'
+    (Nest1 prog') -> fmap (\(NZ1 x) -> x) prog'
 
 -- Returns WebAssembly of main function, and WebAssembly functions for any
 -- nested procedures.

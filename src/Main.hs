@@ -12,6 +12,7 @@ import Transform.Rename.Rename
 import Transform.Capture.Dirty
 import Transform.Capture.Location
 import Back.AST
+import Back.WAT
 import Helper.Free.Free
 import Helper.Co
 import Helper.Pretty as Pretty
@@ -35,9 +36,16 @@ runComp inPath outPath = do
                 (mainVarLocs, funcVarLocs) = procVarLocations renamed
 
             let wasmModule = compile mainVarLocs funcVarLocs dirty renamed
+                wat        = docModule wasmModule
 
-            putStrLn (Pretty.toString 0 $ docAST ast)
-            putStrLn (Pretty.toString 0 $ docAST renamed)
+            putStrLn "-- Parsed --"
+            putStrLn (Pretty.toString 1 $ docAST ast)
+
+            putStrLn "\n-- Renamed --"
+            putStrLn (Pretty.toString 1 $ docAST renamed)
+
+            putStrLn "\n-- WASM --"
+            putStrLn (Pretty.toString 1 $ wat)
 
 main :: IO ()
 main = do

@@ -110,45 +110,45 @@ type Op  f v   = State (Names v)   :+: F.Fresh :+: f
 type Sc  g v   = LocalSt (Names v) :+: g
 type Ctx f g v = Prog (Op f v) (Sc g v)
 
--- Use Nest to factor out Carrier and Carrier'
-type Carrier f g v = Nest (Ctx f g v)
+-- Use Nest1 to factor out Carrier and Carrier'
+type Carrier f g v = Nest1 (Ctx f g v)
 
 getNames :: (Functor f, Functor g) => Ctx f g v (Names v)
 getNames = get
 
 gen :: (Functor f, Functor g) => a -> Carrier f g v a 'Z
-gen x = Nest (return (NZ x))
+gen x = Nest1 (return (NZ1 x))
 
 alg :: (Functor f, Functor g, Ord v) => Alg (Fresh v :+: f) (Rename v :+: g) (Carrier f g v a)
 alg = A a d p where
     a :: (Functor f, Functor g, Ord v) => (Fresh v :+: f) (Carrier f g v a n) -> Carrier f g v a n
-    a (Fresh v fk) = Nest $ do
+    a (Fresh v fk) = Nest1 $ do
         env <- get
         case Map.lookup v env of
            -- Mapping already exists, so just return it.
-           Just fresh -> runNest (fk fresh)
+           Just fresh -> runNest1 (fk fresh)
            -- No mapping exists, so create a new one.
            Nothing -> do
                f <- insFresh v
-               runNest (fk f)
+               runNest1 (fk f)
 
-    a (Exists v fk) = Nest $ do
+    a (Exists v fk) = Nest1 $ do
         env <- getNames
         let exists = v `Map.member` env
-        runNest (fk exists)
+        runNest1 (fk exists)
 
-    a (Other op) = Nest (Op (fmap runNest (R (R op))))
+    a (Other op) = Nest1 (Op (fmap runNest1 (R (R op))))
 
     d :: (Functor f, Functor g, Ord v) => (Rename v :+: g) (Carrier f g  v a ('S n)) -> Carrier f g v a n
-    d (Rename vs k) = Nest $ do
+    d (Rename vs k) = Nest1 $ do
         saved <- getNames
         ins   <- insManyFresh vs
 
         -- Run nested continuation with local state.
         -- run' is the continuation remaining after the local continuation.
         -- Before running this the state is restored.
-        (NS run', localEnv) <- localSt ins (do
-            r <- runNest k
+        (NS1 run', localEnv) <- localSt ins (do
+            r <- runNest1 k
             e <- getNames
             return (r, e))
 
@@ -156,16 +156,16 @@ alg = A a d p where
         put (restoreNames saved localEnv)
         run'
 
-    d (Other op) = Nest (Scope (fmap (\(Nest prog) -> fmap f prog) (R op))) where
-        f :: (Functor f, Functor g) => Nest' (Ctx f g v) a ('S n) -> Ctx f g v (Nest' (Ctx f g v) a n)
-        f (NS prog) = prog
+    d (Other op) = Nest1 (Scope (fmap (\(Nest1 prog) -> fmap f prog) (R op))) where
+        f :: (Functor f, Functor g) => Nest1' (Ctx f g v) a ('S n) -> Ctx f g v (Nest1' (Ctx f g v) a n)
+        f (NS1 prog) = prog
 
     p :: (Functor f, Functor g) => Carrier f g v a n -> Carrier f g v a ('S n)
-    p (Nest runNest) = Nest (return (NS runNest))
+    p (Nest1 runNest1) = Nest1 (return (NS1 runNest1))
 
 mkCtx :: (Functor f, Functor g, Ord v) => Prog (Fresh v :+: f) (Rename v :+: g) a -> Ctx f g v a
 mkCtx prog = case run gen alg prog of
-    (Nest prog') -> fmap (\(NZ x) -> x) prog'
+    (Nest1 prog') -> fmap (\(NZ1 x) -> x) prog'
 
 handleRename :: (Functor f, Functor g, Ord v) => Prog (Fresh v :+: f) (Rename v :+: g) a -> Prog f g a
 handleRename prog = do

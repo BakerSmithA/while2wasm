@@ -16,6 +16,12 @@ module Back.WASM
 , UniOp(..)
 , BinOp(..)
 , RelOp(..)
+, Instr(..)
+, ArithInstr(..)
+, VarInstr(..)
+, MemInstr(..)
+, BranchInstr(..)
+, ControlInstr(..)
 , WASM
 , DoesRet
 , Func(..)
@@ -124,7 +130,7 @@ data BranchInstr k
     deriving Functor
 
 -- WASM control structures with scope.
-data Control k
+data ControlInstr k
     -- Block of instructions. Branching to block from inside will jump forward
     -- to the end of the block.
     = BLOCK k
@@ -139,7 +145,7 @@ data Control k
     deriving Functor
 
 type Op   = Instr :+: ArithInstr :+: VarInstr :+: MemInstr :+: BranchInstr
-type Sc   = Control
+type Sc   = ControlInstr
 type WASM = Prog Op Sc ()
 
 type DoesRet = Bool
