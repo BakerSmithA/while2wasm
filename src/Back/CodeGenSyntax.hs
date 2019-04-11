@@ -13,8 +13,9 @@ module Back.CodeGenSyntax
 , SrcParamVars
 , LocType(..)
 , ValType(..)
-, Emit
-, Block
+, Emit(..)
+, Block(..)
+, WASM
 , wasmName
 , emit
 , spName
@@ -90,7 +91,7 @@ data Emit k
 data Block k
     -- Create a new block of instructions that nested emits will append to.
     -- Once scope is exited, this block will be popped from the stack.
-    = Block k
+    = CodeBlock k
     -- Create a new block of instructions that nested emits will append to.
     -- Once scope is exited, the instructions will be placed in a function.
     | Function SrcProc DoesRet SrcLocalVars SrcParamVars SrcSPOffsets k
@@ -117,7 +118,7 @@ varType v = injectP (VarType v Var)
 -- Returns instructions emitted in the block allowing them to be wrapped up
 -- in a WASM control structure, e.g. BLOCK.
 codeBlock :: (Functor f, Emit :<: f, Block :<: g) => Prog f g () -> Prog f g WASM
-codeBlock inner = injectPSc (fmap (fmap return) (Block (do inner; currInstr)))
+codeBlock inner = injectPSc (fmap (fmap return) (CodeBlock (do inner; currInstr)))
 
 -- Emits nested instructions to a new function.
 function :: (Functor f, Block :<: g)

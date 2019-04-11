@@ -11,7 +11,7 @@ import Front.Pretty
 import Transform.Rename.Rename
 import Transform.Capture.Dirty
 import Transform.Capture.Location
-import Back.AST
+import Back.Compile
 import Back.WAT
 import Helper.Free.Free
 import Helper.Co
@@ -32,10 +32,10 @@ runComp inPath outPath = do
             let ast =  free parsed   :: While Ident Ident
             renamed <- tryRename ast
 
-            let dirty = dirtyVars renamed :: Set FreshName
-                (mainVarLocs, funcVarLocs) = procVarLocations renamed
+            -- let dirty = dirtyVars renamed :: Set FreshName
+            --     (mainVarLocs, funcVarLocs) = procVarLocations renamed
 
-            let wasmModule = compile mainVarLocs funcVarLocs dirty renamed
+            let wasmModule = compile renamed
                 wat        = docModule wasmModule
 
             putStrLn "-- Parsed --"

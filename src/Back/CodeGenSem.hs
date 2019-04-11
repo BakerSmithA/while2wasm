@@ -3,13 +3,19 @@
 
 {-# LANGUAGE GADTs, DataKinds, KindSignatures #-}
 
-module Back.CodeGenSem where
+module Back.CodeGenSem
+( FuncMeta(..)
+, GenEnv(..)
+, handleCodeGen
+) where
 
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Back.CodeGenSyntax
 import Helper.Scope.Prog
 
 --------------------------------------------------------------------------------
--- Auxillary Types to help describe semantics
+-- Auxillary BlockStack
 --------------------------------------------------------------------------------
 
 -- WASM instructions are emitted onto the top of a stack of instructions.
@@ -25,51 +31,75 @@ import Helper.Scope.Prog
 -- Stack of WebAssembly instructions representing instructions at different
 -- scopes. Instructions are emitted become the continuation of the topmost
 -- instruction.
-type BlockStack f g = [Prog f g ()]
+type BlockStack = [WASM]
 
 -- Set continuation of block on top of block-stack to be wasm.
-appendInstr :: (Functor f, Functor g) => Prog f g () -> BlockStack f g -> BlockStack f g
+appendInstr :: WASM -> BlockStack -> BlockStack
 appendInstr wasm []           = [wasm]
 appendInstr wasm (block:rest) = (block >> wasm):rest
 
 -- Return block on top of stack without popping it.
-peekBlock :: BlockStack f g -> Prog f g ()
+peekBlock :: BlockStack -> WASM
 peekBlock []       = error "No blocks on stack"
 peekBlock (wasm:_) = wasm
 
 -- Remove block from top of stack.
-popBlock ::  BlockStack f g -> BlockStack f g
+popBlock ::  BlockStack -> BlockStack
 popBlock []       = error "No blocks on stack"
 popBlock (_:rest) = rest
 
 -- Create a new block of instructions of top of stack.
-pushBlock :: Prog f g () -> BlockStack f g -> BlockStack f g
+pushBlock :: WASM -> BlockStack -> BlockStack
 pushBlock wasm blocks = wasm:blocks
+
+--------------------------------------------------------------------------------
+-- Auxillary Env
+--------------------------------------------------------------------------------
+
+-- Meta data about the function currently being compiled.
+data FuncMeta = FuncMeta {
+    localVars :: Set SrcVar
+  , paramVars :: Set SrcVar
+}
+
+-- Global state regarding compilation.
+data GenEnv = GenEnv {
+    blocks    :: BlockStack
+  , dirtyVars :: Set SrcVar
+}
+
+emptyGenEnv :: GenEnv
+emptyGenEnv = GenEnv [] Set.empty
+
+modifyBlockStack :: (BlockStack -> BlockStack) -> GenEnv -> GenEnv
+modifyBlockStack f env = env { blocks = f (blocks env) }
 
 --------------------------------------------------------------------------------
 -- Semantics
 --------------------------------------------------------------------------------
 
-data Carrier f g n = CG { runCG :: (BlockStack f g -> (Carrier' f g n, BlockStack f g)) }
+data Carrier n = CG { runCG :: (GenEnv -> (Carrier' n, GenEnv)) }
 
-data Carrier' f g :: Nat -> * where
-    CZ :: Carrier' f g 'Z
-    CS :: (BlockStack f g -> (Carrier' f g n, BlockStack f g)) -> Carrier' f g ('S n)
+data Carrier' :: Nat -> * where
+    CZ :: Carrier' 'Z
+    CS :: (GenEnv -> (Carrier' n, GenEnv)) -> Carrier' ('S n)
 
-gen :: () -> Carrier f g 'Z
+gen :: () -> Carrier 'Z
 gen _ = CG (\st -> (CZ, st))
 
-alg :: Alg Emit Block (Carrier f g)
+alg :: Alg Emit Block Carrier
 alg = A a d p where
-    a :: Emit (Carrier f g n) -> Carrier f g n
-    a = undefined
+    a :: Emit (Carrier n) -> Carrier n
+    a (Emit wasm k)  = CG $ \env -> runCG k (modifyBlockStack (appendInstr wasm) env)
+    a (VarType v fk) = CG $ \env -> runCG (fk (Local (Val v))) env
+    a _ = undefined
 
-    d :: Block (Carrier f g ('S n)) -> Carrier f g n
+    d :: Block (Carrier ('S n)) -> Carrier n
     d = undefined
 
-    p :: Carrier f g n -> Carrier f g ('S n)
+    p :: Carrier n -> Carrier ('S n)
     p = undefined
 
-handleCodeGen :: BlockStack f g -> Prog Emit Block () -> BlockStack f g
-handleCodeGen st prog = case runCG (run gen alg prog) st of
-    (_, st') -> st'
+handleCodeGen :: Prog Emit Block () -> WASM
+handleCodeGen prog = case runCG (run gen alg prog) emptyGenEnv of
+    (_, env) -> peekBlock (blocks env)
