@@ -56,6 +56,8 @@ type SrcProc = FreshName
 type SrcLocalVars = Set SrcVar
 -- Variables passed into a function.
 type SrcParamVars = Set SrcVar
+-- Used to lookup where variables are stored in relation to SP.
+type SrcSPOffsets = Map SrcVar Word
 
 -- Whether variable is stored as a value local to a function, or is passed in
 -- as a parameter.
@@ -96,7 +98,7 @@ data Block k
     = Block' k
     -- Create a new block of instructions that nested emits will append to.
     -- Once scope is exited, the instructions will be placed in a function.
-    | Function' SrcProc DoesRet k
+    | Function' SrcProc DoesRet SrcLocalVars SrcParamVars SrcSPOffsets k
     deriving Functor
 
 pattern Emit instr k <- (prj -> Just (Emit' instr k))
@@ -130,9 +132,20 @@ codeBlock :: (Functor f, Emit :<: f, Block :<: g) => Prog f g () -> Prog f g WAS
 codeBlock inner = injectPSc (fmap (fmap return) (Block' (do inner; currInstr)))
 
 -- Emits nested instructions to a new function.
-pattern Function fname doesRet body <- (prj -> Just (Function' fname doesRet body))
-function :: (Functor f, Block :<: g) => SrcProc -> DoesRet -> Prog f g a -> Prog f g a
-function name ret body = injectPSc (fmap (fmap return) (Function' name ret body))
+pattern Function fname doesRet locals params spOffsets body
+    <- (prj -> Just (Function' fname doesRet locals params spOffsets body))
+
+function :: (Functor f, Block :<: g)
+         => SrcProc
+         -> DoesRet
+         -> SrcLocalVars
+         -> SrcParamVars
+         -> SrcSPOffsets
+         -> Prog f g a
+         -> Prog f g a
+
+function pname doesRet locals params spOffsets body
+    = injectPSc (fmap (fmap return) (Function' pname doesRet locals params spOffsets body ))
 
 --------------------------------------------------------------------------------
 -- Convenience functions to make converting from While easier
@@ -247,10 +260,11 @@ pushWorkingFunc func env = env { workingFuncs=func:(workingFuncs env) }
 modifyWorkingFunc :: (InstrBlocks -> InstrBlocks) -> WorkingFuncs -> WorkingFuncs
 modifyWorkingFunc f env =
     case workingFuncs env of
-        []          -> error "No working functions"
+        []          -> env { workingFuncs=[f []] }
         (func:rest) -> env { workingFuncs=(f func):rest }
 
 -- Move current working function to being completed.
+-- Assumes there is only one instruction left in block of intructions for top function.
 completeWorkingFunc :: FuncMeta -> WorkingFuncs -> WorkingFuncs
 completeWorkingFunc meta env = env' where
     env'           = env { completeFuncs=completeFuncs', workingFuncs=rest }
@@ -259,10 +273,6 @@ completeWorkingFunc meta env = env' where
     locals         = map wasmName (Set.elems (localVars meta))
     params         = map wasmName (Set.elems (paramVars meta))
     (block:rest)   = workingFuncs env
-
-makeModule :: WorkingFuncs -> Module
-makeModule (WorkingFuncs [instr] funcs) = Module funcs' [] [] [] where
-    funcs' = undefined
 
 -- Kept separate from WorkingFuncs so a Reader can be used to access these
 -- variables. This ensures they are not modified accidentally.
@@ -367,16 +377,16 @@ alg = A a d p where
         NS k' <- localSt funcs' (runNest k)
         k'
 
-    d (Function pname doesRet k) = Nest $ do
-        globalMeta <- askGlobalMeta
-
-        let (locals, params) = lookupFuncVarLocs pname globalMeta
-            spOffsets        = undefined
-            funcMeta         = FuncMeta (wasmName pname) doesRet spOffsets locals params
+    d (Function pname ret locals params spOffsets k) = Nest $ do
+        let funcMeta = FuncMeta (wasmName pname) ret spOffsets locals params
 
         NS k' <- localR funcMeta (do
+            -- Create a new function that instructions will be emitted to.
+            -- The function currently contains an empty stack of instructions.
             modify (pushWorkingFunc [])
             k' <- runNest k
+            -- All instructions have been added to the function, create a
+            -- WebAssembly function.
             modify (completeWorkingFunc funcMeta)
             return k')
 
@@ -396,11 +406,16 @@ mkCtx prog = case run gen alg prog of
     (Nest prog') -> fmap (\(NZ x) -> x) prog'
 
 handleCodeGen :: (Functor f, Functor g)
-              => Map SrcProc Locations
+              => FuncMeta
+              -> GlobalName
+              -> Map SrcProc Locations
               -> DirtyVars SrcVar
               -> Prog (Emit :+: f) (Block :+: g) a
-              -> Prog f g (a, Module)
+              -> Prog f g (a, [Func])
 
-handleCodeGen funcVarLocs dirtyVars prog = do
-    (x, workingFuncs) <- (handleReader undefined . handleReader undefined . handleState undefined . mkCtx) prog
-    return (x, makeModule workingFuncs)
+handleCodeGen mainFuncMeta spName funcVarLocs dirtyVars prog = do
+    let workingFuncs = WorkingFuncs [] []
+        globalMeta   = GlobalMeta spName funcVarLocs dirtyVars
+
+    (x, workingFuncs) <- (handleReader globalMeta . handleReader mainFuncMeta . handleState workingFuncs . mkCtx) prog
+    return (x, completeFuncs workingFuncs)
