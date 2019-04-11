@@ -12,6 +12,7 @@ module Back.CodeGenSem
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Back.CodeGenSyntax
+import Back.WASM
 import Helper.Scope.Prog
 
 --------------------------------------------------------------------------------
@@ -64,15 +65,25 @@ data FuncMeta = FuncMeta {
 
 -- Global state regarding compilation.
 data GenEnv = GenEnv {
-    blocks    :: BlockStack
-  , dirtyVars :: Set SrcVar
+    blocks        :: BlockStack
+  , completeFuncs :: [Func]
+  , dirtyVars     :: Set SrcVar
 }
 
 emptyGenEnv :: GenEnv
-emptyGenEnv = GenEnv [] Set.empty
+emptyGenEnv = GenEnv [] [] Set.empty
 
 modifyBlockStack :: (BlockStack -> BlockStack) -> GenEnv -> GenEnv
 modifyBlockStack f env = env { blocks = f (blocks env) }
+
+makeFunc :: SrcProc -> DoesRet -> SrcLocalVars -> SrcParamVars -> GenEnv -> GenEnv
+makeFunc pname ret locals params env = env' where
+    env'           = env { completeFuncs=completeFuncs', blocks=rest }
+    completeFuncs' = func:(completeFuncs env)
+    func           = Func (wasmName pname) ret locals' params' body
+    locals'        = map wasmName (Set.elems locals)
+    params'        = map wasmName (Set.elems params)
+    (body:rest)    = blocks env
 
 --------------------------------------------------------------------------------
 -- Semantics
@@ -100,9 +111,14 @@ alg = A a d p where
         in case runCG k env' of
             (CS runK, env'') -> runK (modifyBlockStack popBlock env'')
 
+    d (Function pname ret locals params spOffsets body) = CG $ \env ->
+        let env' = modifyBlockStack (pushBlock (return ())) env
+        in case runCG body env' of
+            (CS runK, env'') -> runK (makeFunc pname ret locals params env'')
+
     p :: Carrier n -> Carrier ('S n)
     p (CG runCG) = CG $ \env -> (CS runCG, env)
 
-handleCodeGen :: Prog Emit Block () -> WASM
+handleCodeGen :: Prog Emit Block () -> (WASM, [Func])
 handleCodeGen prog = case runCG (run gen alg prog) emptyGenEnv of
-    (_, env) -> peekBlock (blocks env)
+    (_, env) -> (peekBlock (blocks env), completeFuncs env)

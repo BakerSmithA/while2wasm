@@ -77,11 +77,11 @@ instance FreeAlg (BlockStm SrcVar SrcProc) CodeGen where
 mkCodeGen :: FreeAlg f CodeGen => Free f a -> CodeGen
 mkCodeGen = evalF (const (return ()))
 
-compile' :: FreeAlg f CodeGen => Free f () -> WASM
+compile' :: FreeAlg f CodeGen => Free f () -> (WASM, [Func])
 compile' = handleCodeGen . mkCodeGen
 
 compile :: FreeAlg f CodeGen => Free f () -> Module
 compile prog = Module funcs [] [] [] where
-    funcs    = [mainFunc]
-    mainFunc = Func "main" False [] [] body
-    body     = compile' prog
+    funcs               = mainFunc:nestedFuncs
+    mainFunc            = Func "main" False [] [] body
+    (body, nestedFuncs) = compile' prog
