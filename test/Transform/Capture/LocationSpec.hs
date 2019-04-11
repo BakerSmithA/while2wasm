@@ -25,7 +25,7 @@ locationSpec = do
     describe "procVarLocations" $ do
         it "returns local variables of top-level" $ do
             let a = setVar (v 0) (num 1) `comp` block' [(v 1, num 2)] [] skip :: FWhile
-                e = (Set.fromList [0, 1], Map.empty)
+                e = ((Set.fromList [0, 1], Set.empty), Map.empty)
             procVarLocations a `shouldBe` e
 
         it "returns mapping from procedures to local variables" $ do
@@ -36,7 +36,7 @@ locationSpec = do
                 p0Locals = Set.fromList [v 0, v 1]
                 p1Locals = Set.fromList [v 2, v 3]
                 expMap   = Map.fromList [(p 0, (p0Locals, Set.empty)), (p 1, (p1Locals, Set.empty))]
-                e        = (Set.empty, expMap)
+                e        = ((Set.empty, Set.empty), expMap)
 
             procVarLocations a `shouldBe` e
 
@@ -55,7 +55,7 @@ locationSpec = do
             let p0Body = setVar (v 0) (num 0)
                 p1Body = setVar (v 1) (num 1)
                 a      = block' [] [(p 0, p0Body), (p 1, p1Body)] skip
-                e      = Set.fromList [v 0, v 1]
+                e      = (Set.fromList [v 0, v 1], Set.empty)
 
             fst (procVarLocations a) `shouldBe` e
 

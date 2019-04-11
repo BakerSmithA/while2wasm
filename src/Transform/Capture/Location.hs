@@ -83,11 +83,12 @@ makeProcVarLocations = evalF (const (return ()))
 
 -- Returns mapping from each procedure, to the locations of variables within each.
 -- Also returns the locations of variables of the top-level scope.
-procVarLocations :: FreeAlg f Carrier => Free f a -> (LocalVars, ProcVarLocations)
+procVarLocations :: FreeAlg f Carrier => Free f a -> (Locations, ProcVarLocations)
 procVarLocations prog =
     let handle = handleVoid . handleWriter . handleLocs . makeProcVarLocations
         ((_, (topLocals, topForeigns)), procVarLocs) = handle prog
-    -- Foreign variables cannot exist at the top-level, therefore they must be local.
-    -- When compiled to WASM, this means meany global variables will be local
-    -- to the main function.
-    in (Set.union topLocals topForeigns, procVarLocs)
+        -- Foreign variables cannot exist at the top-level, therefore they must be local.
+        -- When compiled to WASM, this means meany global variables will be local
+        -- to the main function.
+        mainLocations = (Set.union topLocals topForeigns, Set.empty)
+    in (mainLocations, procVarLocs)
