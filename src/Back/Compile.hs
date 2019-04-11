@@ -55,21 +55,14 @@ instance FreeAlg Stm CodeGen where
         wasmThen <- codeBlock t
         wasmElse <- codeBlock e
         emit (ifElse wasmThen wasmElse)
-
-    -- alg (If cond t e)     = do
-    --     cond
-    --     wasmThen <- codeBlock t
-    --     wasmElse <- codeBlock e
-    --     emit (ifElse wasmThen wasmElse)
-    --
-    -- alg (While cond body) = do
-    --     wasmBlock <- codeBlock (do
-    --         wasmLoop <- codeBlock (do
-    --             cond; emit (uniOp NOT); emit (brIf 1)
-    --             body
-    --             emit (br 0))
-    --         emit (loop wasmLoop))
-    --     emit (block wasmBlock)
+    alg (While cond body) = do
+        wasmBlock <- codeBlock (do
+            wasmLoop <- codeBlock (do
+                cond; emit (uniOp NOT); emit (brIf 1)
+                body
+                emit (br 0))
+            emit (loop wasmLoop))
+        emit (block wasmBlock)
 
 instance FreeAlg (BlockStm SrcVar SrcProc) CodeGen where
     alg (Block varDecls procDecls body) = do
