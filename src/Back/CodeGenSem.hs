@@ -91,14 +91,17 @@ alg :: Alg Emit Block Carrier
 alg = A a d p where
     a :: Emit (Carrier n) -> Carrier n
     a (Emit wasm k)  = CG $ \env -> runCG k (modifyBlockStack (appendInstr wasm) env)
+    a (CurrInstr fk) = CG $ \env -> runCG (fk (peekBlock (blocks env))) env
     a (VarType v fk) = CG $ \env -> runCG (fk (Local (Val v))) env
-    a _ = undefined
 
     d :: Block (Carrier ('S n)) -> Carrier n
-    d = undefined
+    d (CodeBlock k) = CG $ \env ->
+        let env' = modifyBlockStack (pushBlock (return ())) env
+        in case runCG k env' of
+            (CS runK, env'') -> runK (modifyBlockStack popBlock env'')
 
     p :: Carrier n -> Carrier ('S n)
-    p = undefined
+    p (CG runCG) = CG $ \env -> (CS runCG, env)
 
 handleCodeGen :: Prog Emit Block () -> WASM
 handleCodeGen prog = case runCG (run gen alg prog) emptyGenEnv of

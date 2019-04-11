@@ -50,8 +50,11 @@ instance FreeAlg Stm CodeGen where
     alg (Skip)            = emit nop
     alg (Export x)        = x >> emit ret
     alg (Comp s1 s2)      = s1 >> s2
-
-    alg _ = undefined
+    alg (If cond t e)     = do
+        cond
+        wasmThen <- codeBlock t
+        wasmElse <- codeBlock e
+        emit (ifElse wasmThen wasmElse)
 
     -- alg (If cond t e)     = do
     --     cond
