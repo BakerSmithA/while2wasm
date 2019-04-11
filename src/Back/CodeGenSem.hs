@@ -25,7 +25,7 @@ gen wasm = CG (\env -> (CZ wasm, env))
 alg :: Alg GenData Function Carrier
 alg = A a d p where
     a :: GenData (Carrier n) -> Carrier n
-    a = undefined
+    a (VarType v fk) = CG $ \env -> runCG (fk (Local (Val v))) env
 
     d :: Function (Carrier ('S n)) -> Carrier n
     d = undefined

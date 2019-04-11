@@ -50,22 +50,23 @@ localPtrAddr v = do
 
 -- Emit instruction to set value of a variable to value on top of stack.
 -- I.e. store value at memory address pointed to, or set value of variable.
--- emitSetVarVal :: (Functor g, Emit :<: f) => LocType (ValType SrcVar) -> Prog f g () -> Prog f g ()
--- emitSetVarVal (Local (Val v)) val = do val; emit (setLocal (wasmName v))
--- emitSetVarVal (Param (Val v)) val = do val; emit (setLocal (wasmName v))
--- emitSetVarVal (Local (Ptr v)) val = emitSetPtr (emitLocalPtrAddr v) val
--- emitSetVarVal (Param (Ptr v)) val = emitSetPtr (emit (getLocal (wasmName v))) val
+setVarVal :: LocType (ValType SrcVar) -> CodeGen -> CodeGen
+setVarVal (Local (Val v)) val = val >>= \val' -> return (val' >> setLocal (wasmName v))
+-- setVarVal (Param (Val v)) val = do val; emit (setLocal (wasmName v))
+-- setVarVal (Local (Ptr v)) val = emitSetPtr (emitLocalPtrAddr v) val
+-- setVarVal (Param (Ptr v)) val = emitSetPtr (emit (getLocal (wasmName v))) val
 
 -- Sets the value pointed to by a pointer.
--- emitSetPtr :: (Functor g, Emit :<: f) => Prog f g () -> Prog f g () -> Prog f g ()
--- emitSetPtr addr val = do addr; val; emit (store 0)
+setPtr :: CodeGen -> CodeGen -> CodeGen
+setPtr addr val = undefined --do addr; val; emit (store 0)
 
 instance FreeAlg (VarExp SrcVar) CodeGen where
     alg (GetVar v) = varType v >>= varVal
 
 instance FreeAlg AExp CodeGen where
     alg (Num n)   = return $ constNum n
-    alg (Add x y) = x >> y >> return (binOp ADD)
+    alg (Add x y) = do
+        x' <- x; y' <- y; return (x' >> y' >> binOp ADD)
     -- alg (Sub x y) = x >> y >> emit (binOp SUB)
     -- alg (Mul x y) = x >> y >> emit (binOp MUL)
 
@@ -79,7 +80,7 @@ instance FreeAlg BExp CodeGen where
     -- alg (Not x)   = x      >> emit (uniOp NOT)
 
 instance FreeAlg (VarStm SrcVar) CodeGen where
-    alg = undefined
+    alg (SetVar v x) = varType v >>= \v' -> setVarVal v' x
     -- alg (SetVar v x) = emitSetVar v x
 
 -- emitSetVar :: SrcVar -> CodeGen -> CodeGen
@@ -97,7 +98,8 @@ instance FreeAlg (ProcStm SrcProc) CodeGen where
     --     emit (call (wasmName pname))
 
 instance FreeAlg Stm CodeGen where
-    alg = undefined
+    alg (Comp s1 s2) = do s1' <- s1; s2' <- s2; return (s1' >> s2')
+    alg (Export x)   = x >>= \x' -> return (x' >> ret)
 
     -- alg (Skip)            = emit nop
     -- alg (Export x)        = x >> emit ret
