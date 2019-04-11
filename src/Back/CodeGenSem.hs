@@ -18,18 +18,43 @@ import Helper.Scope.Prog
 -- of instructions is used to represent scope. The topmost instruction is
 -- therefore the instruction at the innermost scope.
 
-newtype GenState f g = GenState {
-    -- Stack of WebAssembly instructions representing instructions at different
-    -- scopes. Instructions are emitted become the continuation of the topmost
-    -- instruction.
-    instrStack :: [Prog f g ()]
-}
+-- Terminology:
+--  Block      : Many WebAssembly instructions composed together using (>>=)
+--  BlockStack : Blocks in a stack, where top block represents innermost scope.
 
-data Carrier f g n = CG { runCG :: (GenState f g -> (Carrier' f g n, GenState f g)) }
+-- Stack of WebAssembly instructions representing instructions at different
+-- scopes. Instructions are emitted become the continuation of the topmost
+-- instruction.
+type BlockStack f g = [Prog f g ()]
+
+-- Set continuation of block on top of block-stack to be wasm.
+appendInstr :: (Functor f, Functor g) => Prog f g () -> BlockStack f g -> BlockStack f g
+appendInstr wasm []           = [wasm]
+appendInstr wasm (block:rest) = (block >> wasm):rest
+
+-- Return block on top of stack without popping it.
+peekBlock :: BlockStack f g -> Prog f g ()
+peekBlock []       = error "No blocks on stack"
+peekBlock (wasm:_) = wasm
+
+-- Remove block from top of stack.
+popBlock ::  BlockStack f g -> BlockStack f g
+popBlock []       = error "No blocks on stack"
+popBlock (_:rest) = rest
+
+-- Create a new block of instructions of top of stack.
+pushBlock :: Prog f g () -> BlockStack f g -> BlockStack f g
+pushBlock wasm blocks = wasm:blocks
+
+--------------------------------------------------------------------------------
+-- Semantics
+--------------------------------------------------------------------------------
+
+data Carrier f g n = CG { runCG :: (BlockStack f g -> (Carrier' f g n, BlockStack f g)) }
 
 data Carrier' f g :: Nat -> * where
     CZ :: Carrier' f g 'Z
-    CS :: (GenState f g -> (Carrier' f g n, GenState f g)) -> Carrier' f g ('S n)
+    CS :: (BlockStack f g -> (Carrier' f g n, BlockStack f g)) -> Carrier' f g ('S n)
 
 gen :: () -> Carrier f g 'Z
 gen _ = CG (\st -> (CZ, st))
@@ -45,6 +70,6 @@ alg = A a d p where
     p :: Carrier f g n -> Carrier f g ('S n)
     p = undefined
 
-handleCodeGen :: GenState f g -> Prog Emit Block () -> GenState f g
+handleCodeGen :: BlockStack f g -> Prog Emit Block () -> BlockStack f g
 handleCodeGen st prog = case runCG (run gen alg prog) st of
     (_, st') -> st'
