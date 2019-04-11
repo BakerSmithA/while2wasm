@@ -4,7 +4,7 @@
 -- for language to be extended. This is important as WASM is in MVP and has
 -- new features scheduled.
 
-{-# LANGUAGE DeriveFunctor, TypeOperators #-}
+{-# LANGUAGE DeriveFunctor, TypeOperators, FlexibleContexts #-}
 
 module Back.WASM
 ( LocalName
@@ -22,7 +22,6 @@ module Back.WASM
 , MemInstr(..)
 , BranchInstr(..)
 , ControlInstr(..)
-, WASM
 , DoesRet
 , Func(..)
 , Mutability(..)
@@ -31,6 +30,7 @@ module Back.WASM
 , ExportType(..)
 , Export(..)
 , Module(..)
+, WASM
 , nop
 , constNum
 , uniOp
@@ -184,56 +184,56 @@ data Module = Module {
 
 -- Smart constructors
 
-nop :: WASM
+nop :: Instr :<: f => Prog f g ()
 nop = injectP (NOP (Var ()))
 
-constNum :: Integer -> WASM
+constNum :: ArithInstr :<: f => Integer -> Prog f g ()
 constNum i = injectP (CONST i (Var ()))
 
-uniOp :: UniOp -> WASM
+uniOp :: (ArithInstr :<: f, Functor g) => UniOp -> Prog f g ()
 uniOp NOT = do constNum 1; relOp EQU
 
-binOp :: BinOp -> WASM
+binOp :: ArithInstr :<: f => BinOp -> Prog f g ()
 binOp op = injectP (BIN_OP op (Var ()))
 
-relOp :: RelOp -> WASM
+relOp :: ArithInstr :<: f => RelOp -> Prog f g ()
 relOp op = injectP (REL_OP op (Var ()))
 
-getLocal :: LocalName -> WASM
+getLocal :: VarInstr :<: f => LocalName -> Prog f g ()
 getLocal name = injectP (GET_LOCAL name (Var ()))
 
-setLocal :: LocalName -> WASM
+setLocal :: VarInstr :<: f => LocalName -> Prog f g ()
 setLocal name = injectP (SET_LOCAL name (Var ()))
 
-getGlobal :: GlobalName -> WASM
+getGlobal :: VarInstr :<: f => GlobalName -> Prog f g ()
 getGlobal name = injectP (GET_GLOBAL name (Var ()))
 
-setGlobal :: GlobalName -> WASM
+setGlobal :: VarInstr :<: f => GlobalName -> Prog f g ()
 setGlobal name = injectP (SET_GLOBAL name (Var ()))
 
-load :: MemOffset -> WASM
+load :: MemInstr :<: f => MemOffset -> Prog f g ()
 load offset = injectP (LOAD offset (Var ()))
 
-store :: MemOffset -> WASM
+store :: MemInstr :<: f => MemOffset -> Prog f g ()
 store offset = injectP (STORE offset (Var ()))
 
-br :: Label -> WASM
+br :: BranchInstr :<: f => Label -> Prog f g ()
 br label = injectP (BR label (Var ()))
 
-brIf :: Label -> WASM
+brIf :: BranchInstr :<: f => Label -> Prog f g ()
 brIf label = injectP (BR_IF label (Var ()))
 
-ret :: WASM
+ret :: BranchInstr :<: f => Prog f g ()
 ret = injectP (RET (Var ()))
 
-call :: FuncName -> WASM
+call :: BranchInstr :<: f => FuncName -> Prog f g ()
 call name = injectP (CALL name (Var ()))
 
-block :: WASM -> WASM
+block :: (ControlInstr :<: g, Functor f) => Prog f g () -> Prog f g ()
 block body = injectPSc (fmap (fmap return) (BLOCK body))
 
-ifElse :: WASM -> WASM -> WASM
+ifElse ::(ControlInstr :<: g, Functor f) => Prog f g () -> Prog f g () -> Prog f g ()
 ifElse t e = injectPSc (fmap (fmap return) (IF t e))
 
-loop :: WASM -> WASM
+loop :: (ControlInstr :<: g, Functor f) => Prog f g () -> Prog f g ()
 loop body = injectPSc (fmap (fmap return) (LOOP body))
