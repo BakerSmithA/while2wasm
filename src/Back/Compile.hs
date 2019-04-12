@@ -3,6 +3,8 @@
 
 module Back.Compile where
 
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Control.Monad (foldM)
 import Front.AST hiding (call, ifElse, block)
 import Back.WASM hiding (Export)
@@ -124,11 +126,27 @@ instance FreeAlg (BlockStm SrcVar SrcProc) (CodeGen WASM) where
         foldM (\acc (v, x) -> return acc >>> genVarDecl v x) (return ()) varDecls
             >>> body
 
+-- Return function which returns type of a variable.
+makeVarType :: Set SrcVar -> Set SrcVar -> Set SrcVar -> (SrcVar -> LocType (ValType SrcVar))
+makeVarType _ _ _ v = Local (Val v)
+
+-- Return function which returns offset of a variable from the stack pointer,
+-- provided the variable has a local pointer type.
+makeVarSPOffset :: Set SrcVar -> Set SrcVar -> (SrcVar -> SPOffset)
+makeVarSPOffset = undefined
+
 genProc :: SrcProc -> CodeGen WASM -> CodeGen ()
 genProc pname body = do
-    funcScope undefined undefined (do
+    (locals, params) <- funcVars pname
+    dirty <- dirtyVars
+
+    let varType  = makeVarType locals params dirty
+        spOffset = makeVarSPOffset locals params
+
+    funcScope varType spOffset (do
         bodyWasm <- body
-        emitFunc (wasmName pname) False [] [] bodyWasm)
+        let func = Func (wasmName pname) False [] [] bodyWasm
+        emitFunc func)
 
 genVarDecl :: SrcVar -> CodeGen WASM -> CodeGen WASM
 genVarDecl v x = varType v >>= \v' -> setVarVal v' x
