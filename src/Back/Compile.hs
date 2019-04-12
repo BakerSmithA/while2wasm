@@ -5,14 +5,13 @@ module Back.Compile where
 
 import Front.AST hiding (call, ifElse, block)
 import Back.WASM hiding (Export)
-import Back.CodeGenSyntax
-import Back.CodeGenSem
+import Back.CodeGen
 import Helper.Free.Free
 import Helper.Free.Alg
 import Helper.Scope.Prog
 import Helper.Co
 
-type CodeGen = Prog GenData Function WASM
+type CodeGen = Prog Emit Block WASM
 
 --------------------------------------------------------------------------------
 -- Convenience functions to make converting from While easier
@@ -35,7 +34,7 @@ varAsArg (Param (Ptr v)) = return $ getLocal (wasmName v)
 varVal :: LocType (ValType SrcVar) -> CodeGen
 varVal (Local (Val v)) = return $ getLocal (wasmName v)
 varVal (Param (Val v)) = return $ getLocal (wasmName v)
-varVal (Local (Ptr v)) = localPtrAddr v >>= \addr -> return $ addr >> load 0
+varVal (Local (Ptr v)) = localPtrAddr v >>> return (load 0)
 varVal (Param (Ptr v)) = return $ getLocal (wasmName v) >> load 0
 
 -- Pushes address of a local varible onto the stack, i.e. some offset from SP.
@@ -60,33 +59,35 @@ setVarVal (Local (Val v)) val = val >>= \val' -> return (val' >> setLocal (wasmN
 setPtr :: CodeGen -> CodeGen -> CodeGen
 setPtr addr val = undefined --do addr; val; emit (store 0)
 
+infixr 0 >>>
+
+-- TODO: Make CodeGen a monoid if WASM is a monoid?
+-- Convenience function to help avoid lots of wrapping and unwrapping.
+(>>>) :: CodeGen -> CodeGen -> CodeGen
+(>>>) x y = do
+    x' <- x
+    y' <- y
+    return (x' >> y')
+
 instance FreeAlg (VarExp SrcVar) CodeGen where
     alg (GetVar v) = varType v >>= varVal
 
 instance FreeAlg AExp CodeGen where
     alg (Num n)   = return $ constNum n
-    alg (Add x y) = do
-        x' <- x; y' <- y; return (x' >> y' >> binOp ADD)
-    -- alg (Sub x y) = x >> y >> emit (binOp SUB)
-    -- alg (Mul x y) = x >> y >> emit (binOp MUL)
+    alg (Add x y) = x >>> y >>> return (binOp ADD)
+    alg (Sub x y) = x >>> y >>> return (binOp SUB)
+    alg (Mul x y) = x >>> y >>> return (binOp MUL)
 
 instance FreeAlg BExp CodeGen where
-    alg = undefined
-    -- alg (T)       = emit (constNum 1)
-    -- alg (F)       = emit (constNum 0)
-    -- alg (Equ x y) = x >> y >> emit (relOp EQU)
-    -- alg (LEq x y) = x >> y >> emit (relOp LEQ)
-    -- alg (And x y) = x >> y >> emit (binOp AND)
-    -- alg (Not x)   = x      >> emit (uniOp NOT)
+    alg (T)       = return (constNum 1)
+    alg (F)       = return (constNum 0)
+    alg (Equ x y) = x >>> y >>> return (relOp EQU)
+    alg (LEq x y) = x >>> y >>> return (relOp LEQ)
+    alg (And x y) = x >>> y >>> return (binOp AND)
+    alg (Not x)   = x >>> return (uniOp NOT)
 
 instance FreeAlg (VarStm SrcVar) CodeGen where
     alg (SetVar v x) = varType v >>= \v' -> setVarVal v' x
-    -- alg (SetVar v x) = emitSetVar v x
-
--- emitSetVar :: SrcVar -> CodeGen -> CodeGen
--- emitSetVar v x = do
---     typedV <- varType v
---     emitSetVarVal typedV x
 
 instance FreeAlg (ProcStm SrcProc) CodeGen where
     alg = undefined
@@ -97,30 +98,22 @@ instance FreeAlg (ProcStm SrcProc) CodeGen where
     --     mapM_ (\v -> varType v >>= emitGetVarAsArg) paramNames
     --     emit (call (wasmName pname))
 
+-- NOTE: Using Prog to represent WebAssembly allows generation to be very
+-- natural, with output looking like WebAssembly code.
 instance FreeAlg Stm CodeGen where
-    alg (Comp s1 s2) = do s1' <- s1; s2' <- s2; return (s1' >> s2')
-    alg (Export x)   = x >>= \x' -> return (x' >> ret)
-
-    -- alg (Skip)            = emit nop
-    -- alg (Export x)        = x >> emit ret
-    -- alg (Comp s1 s2)      = s1 >> s2
-    --
-    -- alg _ = undefined
-
-    -- alg (If cond t e)     = do
-    --     cond
-    --     wasmThen <- codeBlock t
-    --     wasmElse <- codeBlock e
-    --     emit (ifElse wasmThen wasmElse)
-    --
-    -- alg (While cond body) = do
-    --     wasmBlock <- codeBlock (do
-    --         wasmLoop <- codeBlock (do
-    --             cond; emit (uniOp NOT); emit (brIf 1)
-    --             body
-    --             emit (br 0))
-    --         emit (loop wasmLoop))
-    --     emit (block wasmBlock)
+    alg (Skip)            = return nop
+    alg (Comp s1 s2)      = s1 >>> s2
+    alg (Export x)        = x >>> return ret
+    alg (If cond t e)     = cond >>> ifElse <$> t <*> e
+    alg (While cond body) = do
+        condWasm <- cond
+        bodyWasm <- body
+        return (
+            block (
+                loop (do
+                    condWasm; uniOp NOT; brIf 1
+                    bodyWasm
+                    br 0)))
 
 instance FreeAlg (BlockStm SrcVar SrcProc) CodeGen where
     alg = undefined
