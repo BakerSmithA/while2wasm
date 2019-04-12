@@ -13,6 +13,7 @@ module Back.CodeGen
 , ValType(..)
 , Emit
 , Block
+, emitFunc
 , spName
 , varSPOffset
 , funcVars
