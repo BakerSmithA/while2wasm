@@ -155,9 +155,10 @@ mkCodeGen :: FreeAlg f (CodeGen WASM) => Free f a -> CodeGen WASM
 mkCodeGen = evalF (const (return (return ())))
 
 compile' :: FreeAlg f (CodeGen WASM) => Set SrcVar -> Set SrcVar -> Set SrcVar -> Free f () -> (WASM, [Func])
-compile' mainLocals mainParams dirty = handleCodeGen varType spOffset . mkCodeGen where
+compile' mainLocals mainParams dirty = handleCodeGen varType spOffset spName . mkCodeGen where
     varType  = makeVarType mainLocals mainParams dirty
     spOffset = makeVarSPOffset mainLocals mainParams
+    spName   = "sp"
 
 compile :: FreeAlg f (CodeGen WASM) => Free f () -> Module
 compile prog = Module funcs [] [] [] where

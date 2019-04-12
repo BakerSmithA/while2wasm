@@ -116,16 +116,20 @@ funcScope varType spOffset inner
 --------------------------------------------------------------------------------
 
 data Env = Env {
-    funcs       :: [Func]
-  , currVarType :: SrcVar -> (LocType (ValType SrcVar))
-  , spOffset    :: SrcVar -> SPOffset
+    funcs        :: [Func]
+  , currVarType  :: SrcVar -> (LocType (ValType SrcVar))
+  , spOffset     :: SrcVar -> SPOffset
+  , globalSPName :: GlobalName
 }
 
-emptyEnv :: (SrcVar -> (LocType (ValType SrcVar))) -> (SrcVar -> SPOffset) -> Env
-emptyEnv varType spOffset = Env [] varType spOffset
+emptyEnv :: (SrcVar -> (LocType (ValType SrcVar))) -> (SrcVar -> SPOffset) -> GlobalName -> Env
+emptyEnv varType spOffset spName = Env [] varType spOffset spName
 
 addFunc :: Func -> Env -> Env
 addFunc func env = env { funcs = func:(funcs env) }
+
+restoreEnv :: Env -> Env -> Env
+restoreEnv old new = old { funcs = funcs new }
 
 --------------------------------------------------------------------------------
 -- Semantics
@@ -143,24 +147,26 @@ gen wasm = CG (\env -> (CZ wasm, env))
 alg :: Alg Emit Block (Carrier a)
 alg = A a d p where
     a :: Emit (Carrier a n) -> Carrier a n
-    a (EmitFunc func k)    = CG $ \env -> runCG k (addFunc func env)
-    a (VarSPOffset var fk) = undefined
-    a (VarType v fk)       = CG $ \env -> runCG (fk (Local (Val v))) env
-    a (SPName fk)          = undefined
-    a (DirtyVars fk)       = CG $ \env -> runCG (fk Set.empty) env
-    a (FuncVars pname fk)  = CG $ \env -> runCG (fk (Set.empty, Set.empty)) env
+    a (EmitFunc func k)   = CG $ \env -> runCG k (addFunc func env)
+    a (VarSPOffset v fk)  = CG $ \env -> runCG (fk (spOffset env v)) env
+    a (VarType v fk)      = CG $ \env -> runCG (fk (currVarType env v)) env
+    a (SPName fk)         = CG $ \env -> runCG (fk (globalSPName env)) env
+    a (DirtyVars fk)      = CG $ \env -> runCG (fk Set.empty) env
+    a (FuncVars pname fk) = CG $ \env -> runCG (fk (Set.empty, Set.empty)) env
 
     -- TODO: FuncScope should modify inner env to use varType and spOffset
     d :: Block (Carrier a ('S n)) -> Carrier a n
     d (FuncScope varType spOffset inner) = CG $ \env ->
-        case runCG inner env of
-            (CS k, env') -> k env'
+        let env' = env { currVarType=varType, spOffset=spOffset }
+        in case runCG inner env of
+            -- Make new environment contain emitted functions.
+            (CS k, env'') -> k (restoreEnv env env'')
 
     p :: Carrier a n -> Carrier a ('S n)
     p (CG runCG) = CG $ \env -> (CS runCG, env)
 
-handleCodeGen :: (SrcVar -> (LocType (ValType SrcVar))) -> (SrcVar -> SPOffset) -> Prog Emit Block a -> (a, [Func])
-handleCodeGen varType spOffset prog =
-    let env = emptyEnv varType spOffset
+handleCodeGen :: (SrcVar -> (LocType (ValType SrcVar))) -> (SrcVar -> SPOffset) -> GlobalName -> Prog Emit Block a -> (a, [Func])
+handleCodeGen varType spOffset spName prog =
+    let env = emptyEnv varType spOffset spName
     in case runCG (run gen alg prog) env of
         (CZ wasm, env) -> (wasm, funcs env)
