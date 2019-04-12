@@ -116,11 +116,13 @@ funcScope varType spOffset inner
 --------------------------------------------------------------------------------
 
 data Env = Env {
-    funcs :: [Func]
+    funcs       :: [Func]
+  , currVarType :: SrcVar -> (LocType (ValType SrcVar))
+  , spOffset    :: SrcVar -> SPOffset
 }
 
-emptyEnv :: Env
-emptyEnv = Env []
+emptyEnv :: (SrcVar -> (LocType (ValType SrcVar))) -> (SrcVar -> SPOffset) -> Env
+emptyEnv varType spOffset = Env [] varType spOffset
 
 addFunc :: Func -> Env -> Env
 addFunc func env = env { funcs = func:(funcs env) }
@@ -157,6 +159,8 @@ alg = A a d p where
     p :: Carrier a n -> Carrier a ('S n)
     p (CG runCG) = CG $ \env -> (CS runCG, env)
 
-handleCodeGen :: Prog Emit Block a -> (a, [Func])
-handleCodeGen prog = case runCG (run gen alg prog) emptyEnv of
-    (CZ wasm, env) -> (wasm, funcs env)
+handleCodeGen :: (SrcVar -> (LocType (ValType SrcVar))) -> (SrcVar -> SPOffset) -> Prog Emit Block a -> (a, [Func])
+handleCodeGen varType spOffset prog =
+    let env = emptyEnv varType spOffset
+    in case runCG (run gen alg prog) env of
+        (CZ wasm, env) -> (wasm, funcs env)

@@ -154,14 +154,18 @@ genVarDecl v x = varType v >>= \v' -> setVarVal v' x
 mkCodeGen :: FreeAlg f (CodeGen WASM) => Free f a -> CodeGen WASM
 mkCodeGen = evalF (const (return (return ())))
 
-compile' :: FreeAlg f (CodeGen WASM) => Free f () -> (WASM, [Func])
-compile' = handleCodeGen . mkCodeGen
+compile' :: FreeAlg f (CodeGen WASM) => Set SrcVar -> Set SrcVar -> Set SrcVar -> Free f () -> (WASM, [Func])
+compile' mainLocals mainParams dirty = handleCodeGen varType spOffset . mkCodeGen where
+    varType  = makeVarType mainLocals mainParams dirty
+    spOffset = makeVarSPOffset mainLocals mainParams
 
 compile :: FreeAlg f (CodeGen WASM) => Free f () -> Module
 compile prog = Module funcs [] [] [] where
     funcs = mainFunc:nestedFuncs
     mainFunc = Func "main" False [] [] mainWasm
-    (mainWasm, nestedFuncs) = compile' prog
+    (mainWasm, nestedFuncs) = compile' mainLocals mainParams dirty prog
+    ((mainLocals, mainParams), funcVarTypes) = undefined
+    dirty = undefined
 
 --     alg (Block varDecls procDecls body) = do
 --         -- Procedures are emitted into separate functions distinct from
