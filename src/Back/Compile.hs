@@ -21,6 +21,16 @@ type CodeGen a = Prog Emit Block a
 -- Convenience functions to make converting from While easier
 --------------------------------------------------------------------------------
 
+infixr 0 >>>
+
+-- TODO: Make CodeGen a monoid if WASM is a monoid?
+-- Convenience function to help avoid lots of wrapping and unwrapping.
+(>>>) :: CodeGen WASM -> CodeGen WASM -> CodeGen WASM
+(>>>) x y = do
+    x' <- x
+    y' <- y
+    return (x' >> y')
+
 -- Converts source-code name into name that can be emitted into WASM.
 wasmName :: SrcVar -> LocalName
 wasmName = show
@@ -55,23 +65,13 @@ localPtrAddr v = do
 -- I.e. store value at memory address pointed to, or set value of variable.
 setVarVal :: LocType (ValType SrcVar) -> CodeGen WASM -> CodeGen WASM
 setVarVal (Local (Val v)) val = val >>= \val' -> return (val' >> setLocal (wasmName v))
--- setVarVal (Param (Val v)) val = do val; emit (setLocal (wasmName v))
--- setVarVal (Local (Ptr v)) val = emitSetPtr (emitLocalPtrAddr v) val
--- setVarVal (Param (Ptr v)) val = emitSetPtr (emit (getLocal (wasmName v))) val
+setVarVal (Param (Val v)) val = val >>= \val' -> return (val' >> setLocal (wasmName v))
+setVarVal (Local (Ptr v)) val = setPtr (localPtrAddr v) val
+setVarVal (Param (Ptr v)) val = setPtr (return (getLocal (wasmName v))) val
 
 -- Sets the value pointed to by a pointer.
 setPtr :: CodeGen WASM -> CodeGen WASM -> CodeGen WASM
-setPtr addr val = undefined --do addr; val; emit (store 0)
-
-infixr 0 >>>
-
--- TODO: Make CodeGen a monoid if WASM is a monoid?
--- Convenience function to help avoid lots of wrapping and unwrapping.
-(>>>) :: CodeGen WASM -> CodeGen WASM -> CodeGen WASM
-(>>>) x y = do
-    x' <- x
-    y' <- y
-    return (x' >> y')
+setPtr addr val = addr >>> val >>> return (store 0)
 
 instance FreeAlg (VarExp SrcVar) (CodeGen WASM) where
     alg (GetVar v) = varType v >>= varVal
@@ -95,6 +95,9 @@ instance FreeAlg (VarStm SrcVar) (CodeGen WASM) where
 
 instance FreeAlg (ProcStm SrcProc) (CodeGen WASM) where
     alg (Call pname) = do
+        -- WARNING: Is there a guarantee the order of argument pushed onto the
+        -- stack is the same as they appear in the function definition?
+        -- I.e. because a Set is used.
         (_, params) <- funcVars pname
         foldM (\acc v -> return acc >>> (varType v >>= varAsArg)) (return ()) params
             >>> return (call (wasmName pname))
@@ -144,12 +147,14 @@ genVarDecl v x = varType v >>= \v' -> setVarVal v' x
 
 -- Return function which returns type of a variable.
 makeVarType :: Set SrcVar -> Set SrcVar -> Set SrcVar -> (SrcVar -> LocType (ValType SrcVar))
-makeVarType _ _ _ v = Local (Val v)
+makeVarType locals params dirty v = locType (valType v) where
+    locType = if Set.member v locals then Local else Param
+    valType = if Set.member v dirty then Ptr else Val
 
 -- Return function which returns offset of a variable from the stack pointer,
 -- provided the variable has a local pointer type.
 makeVarSPOffset :: Set SrcVar -> Set SrcVar -> (SrcVar -> SPOffset)
-makeVarSPOffset = undefined
+makeVarSPOffset _ _ _ = 0
 
 funcLocals :: Set SrcVar -> [LocalName]
 funcLocals = map wasmName . Set.elems

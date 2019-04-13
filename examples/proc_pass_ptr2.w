@@ -6,8 +6,9 @@ begin
             proc g is (
                 x := 1
             );
-            skip
+            call g
         end
     );
+    call f;
     export x
 end
