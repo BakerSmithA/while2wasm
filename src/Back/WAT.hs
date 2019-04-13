@@ -115,7 +115,7 @@ docFunc func =
         text "func "; docVar (name func); sp
         docRet (doesRet func)
         nonEmpty (params func) $ \ps -> map docParam ps `sepBy` sp; sp
-        nonEmpty (locals func) $ \ls -> line' (map docLocal ls `sepBy` sp)
+        nonEmpty (locals func) $ \ls -> map docLocal ls `sepBy` sp
         nl
         -- Body
         indented (docInstr (body func)))

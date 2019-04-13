@@ -191,7 +191,7 @@ constNum :: ArithInstr :<: f => Integer -> Prog f g ()
 constNum i = injectP (CONST i (Var ()))
 
 uniOp :: (ArithInstr :<: f, Functor g) => UniOp -> Prog f g ()
-uniOp NOT = do constNum 1; relOp EQU
+uniOp NOT = do constNum 0; relOp EQU
 
 binOp :: ArithInstr :<: f => BinOp -> Prog f g ()
 binOp op = injectP (BIN_OP op (Var ()))

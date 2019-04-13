@@ -2,7 +2,7 @@
 
 module Main where
 
-import Data.Set (Set)
+import Data.Set as Set (Set, elems)
 import System.Environment
 import Text.Megaparsec (runParser, errorBundlePretty)
 import Front.Parse.Parser
@@ -32,10 +32,10 @@ runComp inPath outPath = do
             let ast =  free parsed   :: While Ident Ident
             renamed <- tryRename ast
 
-            -- let dirty = dirtyVars renamed :: Set FreshName
-            --     (mainVarLocs, funcVarLocs) = procVarLocations renamed
+            let dirty = dirtyVars renamed :: Set FreshName
+                (mainVars, funcVars) = procVarLocations renamed
 
-            let wasmModule = compile renamed
+            let wasmModule = compile mainVars funcVars dirty renamed
                 wat        = docModule wasmModule
 
             putStrLn "-- Parsed --"
@@ -44,8 +44,14 @@ runComp inPath outPath = do
             putStrLn "\n-- Renamed --"
             putStrLn (Pretty.toString 1 $ docAST renamed)
 
+            putStrLn "\n-- Analysis --"
+            putStrLn $ "  Dirty vars: " ++ show (Set.elems dirty)    
+
             putStrLn "\n-- WASM --"
             putStrLn (Pretty.toString 1 $ wat)
+            putStrLn ""
+
+            writeFile outPath (Pretty.toString 0 wat)
 
 main :: IO ()
 main = do
