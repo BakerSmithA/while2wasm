@@ -24,19 +24,22 @@ parserSpec = do
                 runParser aexp "" "123" `shouldParse` Num 123
 
             it "parses variables" $ do
-                runParser aexp "" "var_name" `shouldParse` Ident "var_name"
+                runParser aexp "" "var_name" `shouldParse` GetVar "var_name"
+
+            it "parses array subscription" $ do
+                runParser aexp "" "xs[0]" `shouldParse` GetElem "xs" (Num 0)
 
             it "parses multiplication" $ do
-                runParser aexp "" "123 * x" `shouldParse` Mul (Num 123) (Ident "x")
+                runParser aexp "" "123 * x" `shouldParse` Mul (Num 123) (GetVar "x")
 
             it "parses addition" $ do
-                runParser aexp "" "123 + x" `shouldParse` Add (Num 123) (Ident "x")
+                runParser aexp "" "123 + x" `shouldParse` Add (Num 123) (GetVar "x")
 
             it "parses subtraction" $ do
-                runParser aexp "" "123 - x" `shouldParse` Sub (Num 123) (Ident "x")
+                runParser aexp "" "123 - x" `shouldParse` Sub (Num 123) (GetVar "x")
 
             it "parses parenthesis" $ do
-                runParser aexp "" "(x)" `shouldParse` Ident "x"
+                runParser aexp "" "(x)" `shouldParse` GetVar "x"
 
         context "bexp" $ do
             it "parses true" $ do
@@ -46,13 +49,13 @@ parserSpec = do
                 runParser bexp "" "false" `shouldParse` F
 
             it "parses aexp equaNumy" $ do
-                let lhs = Add (Num 1) (Ident "x")
-                    rhs = Ident "y"
+                let lhs = Add (Num 1) (GetVar "x")
+                    rhs = GetVar "y"
                     exp = Equ lhs rhs
                 runParser bexp "" "1+x = y" `shouldParse` exp
 
             it "parses aexp less-than-or-equal-to" $ do
-                let exp = LEq (Num 7) (Ident "y")
+                let exp = LEq (Num 7) (GetVar "y")
                 runParser bexp "" "7 <= y" `shouldParse` exp
 
             it "parses not" $ do
@@ -62,25 +65,36 @@ parserSpec = do
                 runParser bexp "" "true && false" `shouldParse` And T F
 
         context "stms" $ do
-            it "parses Assign" $ do
-                runParser stms "" "x := 1" `shouldParse` Assign "x" (Num 1)
+            it "parses setting a variable to an aexp" $ do
+                runParser stms "" "x := 1" `shouldParse` SetVar "x" (AssignAExp (Num 1))
+
+            it "parses setting a variable to an array" $ do
+                runParser stms "" "x := [1, y, 3]" `shouldParse` SetVar "x" (AssignArr [Num 1, GetVar "y", Num 3])
+
+            it "parses setting an array element" $ do
+                runParser stms "" "x[0] := y" `shouldParse` SetElem "x" (Num 0) (GetVar "y")
 
             it "parses skip" $ do
                 runParser stms "" "skip" `shouldParse` Skip
 
             it "parses if" $ do
                 let s   = "if true then x := 1 else skip"
-                    exp = If T (Assign "x" (Num 1)) Skip
+                    exp = If T (SetVar "x" (AssignAExp (Num 1))) Skip
                 runParser stms "" s `shouldParse` exp
 
             it "parses while" $ do
                 let s   = "while true do x := 1"
-                    exp = While T (Assign "x" (Num 1))
+                    exp = While T (SetVar "x" (AssignAExp (Num 1)))
                 runParser stms "" s `shouldParse` exp
 
-            it "parses blocks with variable declarations" $ do
+            it "parses blocks with aexp variable declarations" $ do
                 let s   = "begin var x:=1; var y:=2; skip end"
-                    exp = Block [("x", Num 1), ("y", Num 2)] [] Skip
+                    exp = Block [("x", AssignAExp (Num 1)), ("y", AssignAExp (Num 2))] [] Skip
+                runParser stms "" s `shouldParse` exp
+
+            it "parses blocks with array variable declarations" $ do
+                let s   = "begin var x:=[1, 2, 3]; var y:=[4, 5, 6]; skip end"
+                    exp = Block [("x", AssignArr [Num 1, Num 2, Num 3]), ("y", AssignArr [Num 4, Num 5, Num 6])] [] Skip
                 runParser stms "" s `shouldParse` exp
 
             it "parses blocks with procedure declarations" $ do
@@ -90,26 +104,26 @@ parserSpec = do
 
             it "parses blocks with variable and procedure declarations" $ do
                 let s   = "begin var x:=1; proc f is skip; skip end"
-                    exp = Block [("x", Num 1)] [("f", Skip)] Skip
+                    exp = Block [("x", AssignAExp (Num 1))] [("f", Skip)] Skip
                 runParser stm "" s `shouldParse` exp
 
             it "parses composition" $ do
                 let s   = "x := 1; skip; while true do skip"
-                    exp = Comp (Assign "x" (Num 1)) (Comp Skip (While T Skip))
+                    exp = Comp (SetVar "x" (AssignAExp (Num 1))) (Comp Skip (While T Skip))
                 runParser stms "" s `shouldParse` exp
 
             it "parses nested composition" $ do
                 let s    = "if x=0 then skip else skip; export x"
-                    exp  = If (Equ (Ident "x") (Num 0)) Skip Skip `Comp` Export (Ident "x")
+                    exp  = If (Equ (GetVar "x") (Num 0)) Skip Skip `Comp` Export (GetVar "x")
                 runParser stms "" s `shouldParse` exp
 
             it "parses exports" $ do
                 let s   = "export x"
-                    exp = Export (Ident "x")
+                    exp = Export (GetVar "x")
                 runParser stms "" s `shouldParse` exp
 
         context "parsing sample programs" $ do
             it "parses factorial" $ do
                 let s = "y:=1; while !(x=1) do (y:=y*x; x:=x-1)"
-                    exp = Comp (Assign "y" (Num 1)) (While (Not (Equ (Ident "x") (Num 1))) (Comp (Assign "y" (Mul (Ident "y") (Ident "x"))) (Assign "x" (Sub (Ident "x") (Num 1)))))
+                    exp = Comp (SetVar "y" (AssignAExp (Num 1))) (While (Not (Equ (GetVar "x") (Num 1))) (Comp (SetVar "y" (AssignAExp (Mul (GetVar "y") (GetVar "x")))) (SetVar "x" (AssignAExp (Sub (GetVar "x") (Num 1))))))
                 runParser stms "" s `shouldParse` exp
