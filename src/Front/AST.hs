@@ -14,7 +14,10 @@ type Ident = String
 -- Expressions over variables (i.e. produces a value), where variable names are
 -- represented as strings.
 data VarExp v k
+    -- E.g. x
     = GetVar v
+    -- E.g. xs[i]
+    | GetElem v k
     deriving (Functor, Eq, Show)
 
 data AExp k
@@ -33,8 +36,17 @@ data BExp k
     | Not k
     deriving (Functor, Eq, Show)
 
+-- Used when assigning a variable to an array. This can be done in a variable
+-- assignment, or a local declaration as part of a block.
+-- NOTE: This is a slight abuse of (:+:) which allows any type to be placed in
+-- the `k`. See in the recursive version that there is a coproduct type which
+-- stores either an AExp or Arr.
+data Arr k
+    = Arr [k]
+    deriving (Functor, Eq, Show)
+
 type VarDecls  v k = [(v, k)]
-type ProcDecls v k = [(v, k)]
+type ProcDecls p k = [(p, k)]
 
 fsts :: [(a, b)] -> [a]
 fsts = fst . unzip
@@ -52,7 +64,10 @@ map2M f g = mapM $ \(x, y) -> do
 -- Compared to when using Prog, statements no longer have their own continuation.
 -- Instead, Comp is used to compose statements
 data VarStm v k
+    -- E.g. x := y
     = SetVar v k
+    -- E.g. xs[i] = y
+    | SetElem v k k
     deriving (Functor, Eq, Show)
 
 -- Statements regarding procedures, where procedure names are represented
