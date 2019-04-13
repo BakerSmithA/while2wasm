@@ -17,7 +17,7 @@ cabal-version:       >=1.10
 
 executable w2w
   main-is:             Main.hs
-  ghc-options:         -Wno-missing-signatures -Wno-orphans 
+  ghc-options:         -Wno-missing-signatures -Wno-orphans
   -- other-modules:
   -- other-extensions:
   build-depends:       base
@@ -28,16 +28,16 @@ executable w2w
                      , parser-combinators
                      , containers
 
-test-suite spec
-  ghc-options:         -Wall -fno-warn-name-shadowing -Wno-type-defaults -Wno-missing-signatures -Wno-orphans -O0
-  type:                exitcode-stdio-1.0
-  main-is:             Test.hs
-  build-depends:       base
-                     , hspec
-                     , hspec-megaparsec
-                     , megaparsec
-                     , parser-combinators
-                     , containers
-  -- other-modules:
-  hs-source-dirs:      src, test
-  default-language:    Haskell2010
+-- test-suite spec
+--   ghc-options:         -Wall -fno-warn-name-shadowing -Wno-type-defaults -Wno-missing-signatures -Wno-orphans -O0
+--   type:                exitcode-stdio-1.0
+--   main-is:             Test.hs
+--   build-depends:       base
+--                      , hspec
+--                      , hspec-megaparsec
+--                      , megaparsec
+--                      , parser-combinators
+--                      , containers
+--   -- other-modules:
+--   hs-source-dirs:      src, test
+--   default-language:    Haskell2010

@@ -15,7 +15,8 @@ instance Pretty Ident where
     pretty = text
 
 instance Pretty v => FreeAlg (VarExp v) (Doc ()) where
-    alg (GetVar v) = pretty v
+    alg (GetVar v)    = pretty v
+    alg (GetElem v i) = pretty v >> brackets i
 
 instance FreeAlg AExp (Doc ()) where
     alg (Num n)    = showable n
@@ -31,8 +32,13 @@ instance FreeAlg BExp (Doc ()) where
     alg (And x y) = parens (do x; text " & "; y)
     alg (Not x)   = parens (do text "!"; x)
 
+instance FreeAlg Assign (Doc ()) where
+    alg (AssignAExp x) = x
+    alg (AssignArr xs) = brackets (xs `sepBy` text ", ")
+
 instance Pretty v => FreeAlg (VarStm v) (Doc ()) where
-    alg (SetVar var val) = do pretty var; text " := "; val
+    alg (SetVar var val)      = do pretty var; text " := "; val
+    alg (SetElem var idx val) = do pretty var; brackets idx; text " := "; val
 
 instance Pretty p => FreeAlg (ProcStm p) (Doc ()) where
     alg (Call pname) = do text "call "; pretty pname

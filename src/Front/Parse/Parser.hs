@@ -1,6 +1,6 @@
 module Front.Parse.Parser where
 
-import Front.Parse.Rec (Stm(..), AExp(..), BExp(..), Ident)
+import Front.Parse.Rec (Stm(..), AExp(..), BExp(..), Assign(..), Ident)
 import Data.Void
 import Control.Monad (void)
 import Text.Megaparsec
@@ -23,6 +23,10 @@ tok s = chunk s <* whitespace
 -- Return parser for `a`, surrounded by parenthesis.
 parens :: Parser a -> Parser a
 parens = between (tok "(") (tok ")")
+
+-- Return parser for `a`, surrounded by square brackets.
+brackets :: Parser a -> Parser a
+brackets = between (tok "[") (tok "]")
 
 -- Parsers integer literals.
 intLit :: Parser Integer
@@ -52,8 +56,9 @@ snakeId = reserveCheckedId p where
 aexp :: Parser AExp
 aexp = makeExprParser basis ops where
     basis = parens aexp
-        <|> Num   <$> intLit
-        <|> Ident <$> snakeId
+        <|> Num          <$> intLit
+        <|> try (GetElem <$> snakeId <*> brackets aexp)
+        <|> GetVar       <$> snakeId
 
     ops = [[InfixL (Mul <$ tok "*")],
            [InfixL (Add <$ tok "+"), InfixL (Sub <$ tok "-")]]
@@ -70,10 +75,15 @@ bexp = makeExprParser basis ops where
     ops = [[Prefix (Not <$ tok "!")],
            [InfixL (And <$ tok "&&")]]
 
+-- Parses RHS of variable assignment.
+assign :: Parser Assign
+assign = AssignArr  <$> brackets (aexp `sepBy` tok ",")
+     <|> AssignAExp <$> aexp
+
 -- Parses variable declarations as part of a block.
-varDecl :: Parser (Ident, AExp)
+varDecl :: Parser (Ident, Assign)
 varDecl = do
-    tok "var"; i <- snakeId; tok ":="; x <- aexp; tok ";"
+    tok "var"; i <- snakeId; tok ":="; x <- assign; tok ";"
     return (i, x)
 
 -- Parses a procedure declaration as part of a block.
@@ -84,7 +94,8 @@ procDecl = do
 
 -- Parses statements excluding composition.
 stm :: Parser Stm
-stm = try (Assign <$> snakeId <* tok ":=" <*> aexp)
+stm = try (SetVar <$> snakeId <* tok ":=" <*> assign)
+  <|> try (SetElem <$> snakeId <*> brackets aexp <* tok ":=" <*> aexp)
   <|> Skip <$ tok "skip"
   <|> If <$ tok "if" <*> bexp <* tok "then" <*> innerStm <* tok "else" <*> innerStm
   <|> While <$ tok "while" <*> bexp <* tok "do" <*> innerStm

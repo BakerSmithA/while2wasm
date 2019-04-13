@@ -36,13 +36,11 @@ data BExp k
     | Not k
     deriving (Functor, Eq, Show)
 
--- Used when assigning a variable to an array. This can be done in a variable
--- assignment, or a local declaration as part of a block.
--- NOTE: This is a slight abuse of (:+:) which allows any type to be placed in
--- the `k`. See in the recursive version that there is a coproduct type which
--- stores either an AExp or Arr.
-data Arr k
-    = Arr [k]
+-- Assign a variable to either an array or an arithmetic expression.
+-- Used for local variable declarations or normal variable assignments.
+data Assign k
+    = AssignArr  [k]
+    | AssignAExp k
     deriving (Functor, Eq, Show)
 
 type VarDecls  v k = [(v, k)]
@@ -90,7 +88,7 @@ data BlockStm v p k
     = Block (VarDecls v k) (ProcDecls p k) k
     deriving (Functor, Eq, Show)
 
-type While v p = Free (VarExp v :+: AExp :+: BExp :+: VarStm v :+: ProcStm p :+: Stm :+: BlockStm v p) ()
+type While v p = Free (VarExp v :+: AExp :+: BExp :+: Assign :+: VarStm v :+: ProcStm p :+: Stm :+: BlockStm v p) ()
 
 -- Smart Constructors
 
@@ -98,6 +96,9 @@ type While v p = Free (VarExp v :+: AExp :+: BExp :+: VarStm v :+: ProcStm p :+:
 
 getVar :: VarExp v :<: f => v -> Free f a
 getVar v = injectF (GetVar v)
+
+getElem :: VarExp v :<: f => v -> Free f a -> Free f a
+getElem v i = injectF (GetElem v i)
 
 -- AExp
 
@@ -133,10 +134,21 @@ andB x y = injectF (And x y)
 notB :: BExp :<: f => Free f a -> Free f a
 notB x = injectF (Not x)
 
+-- Assign
+
+assignAExp :: Assign :<: f => Free f a -> Free f a
+assignAExp x = injectF (AssignAExp x)
+
+assignArr :: Assign :<: f => [Free f a] -> Free f a
+assignArr xs = injectF (AssignArr xs)
+
 -- IVarStm
 
 setVar :: VarStm v :<: f => v -> Free f a -> Free f a
 setVar v x = injectF (SetVar v x)
+
+setElem :: VarStm v :<: f => v -> Free f a -> Free f a -> Free f a
+setElem v i x = injectF (SetElem v i x)
 
 -- IProcStm
 

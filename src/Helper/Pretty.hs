@@ -20,6 +20,7 @@ module Helper.Pretty
 , nonEmpty
 , line
 , parens
+, brackets
 , quoted
 , sepBy
 , sepByEnd
@@ -82,6 +83,9 @@ line s = do text s; nl
 -- Wraps inner document in parenthesis.
 parens :: Doc a -> Doc a
 parens inner = do text "("; x <- inner; text ")"; return x
+
+brackets :: Doc a -> Doc a
+brackets inner = do text "["; x <- inner; text "]"; return x
 
 -- Wrapper inner document in quotation marks.
 quoted :: Doc () -> Doc ()
