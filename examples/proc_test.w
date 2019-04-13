@@ -1,15 +1,11 @@
 begin
     proc f is (
-        begin var y:=2;
-            x:=y
-        end
-    );
-    proc h is (
-        begin var y:=3;
-            z := 100
+        // y should be local to f
+        begin var y := 2;
+            // x should be global
+            x := y
         end
     );
     call f;
-    call h;
     export x
 end

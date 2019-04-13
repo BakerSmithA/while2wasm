@@ -2,7 +2,7 @@
 
 module Main where
 
-import Data.Set (Set)
+import Data.Set as Set (Set, elems)
 import System.Environment
 import Text.Megaparsec (runParser, errorBundlePretty)
 import Front.Parse.Parser
@@ -44,8 +44,12 @@ runComp inPath outPath = do
             putStrLn "\n-- Renamed --"
             putStrLn (Pretty.toString 1 $ docAST renamed)
 
+            putStrLn "\n-- Analysis --"
+            putStrLn $ "  Dirty vars: " ++ show (Set.elems dirty)    
+
             putStrLn "\n-- WASM --"
             putStrLn (Pretty.toString 1 $ wat)
+            putStrLn ""
 
             writeFile outPath (Pretty.toString 0 wat)
 
