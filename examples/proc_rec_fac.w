@@ -1,14 +1,27 @@
+/* x := 5;
 begin
-    var n := 6; var r := 1;
-    proc fac is (
-        if !n=1 then (
-            r := r * n;
-            n := n - 1;
-            call fac
+    proc f is (
+        if !(x = 0) then (
+            x := x - 1;
+            call f
         ) else (
             skip
         )
     );
-    call fac;
+    call f;
+    export x
+end */
+
+x := 5;
+r := 10;
+begin
+    proc f is (
+        if x = 5 then (
+            r := 1
+        ) else (
+            r := 0
+        )
+    );
+    call f;
     export r
 end
