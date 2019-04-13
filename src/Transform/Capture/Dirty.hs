@@ -40,8 +40,21 @@ instance FreeAlg BExp (Carrier v) where
 --     = AssignAExp v k
 --     | AssignArr  v [k]
 --
--- Then, block decl stores assignments instead of (v, k) tuple.
--- Assignment can then be ommitted from Stm type. 
+-- Then, block decl stores assignments instead of (v, k) tuple...?
+-- TODO: However, some analysis requires names of local variables. These would not
+-- be easily accessible if not in form (v, k). Instead, would need to provide
+-- algebra to get variable names?
+--
+-- Assignment can then be ommitted from Stm type.
+--
+-- Makes recursive type
+--
+-- data Assign = ...
+-- data Stm
+--     = Assign Assign
+--     | ...
+-- data VarDecl = [Assign]
+--
 instance FreeAlg Assign (Carrier v) where
     alg = undefined
 
