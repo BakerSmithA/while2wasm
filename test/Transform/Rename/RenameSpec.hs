@@ -17,11 +17,23 @@ getIVar = getVar
 getFVar :: VarExp FreshName :<: f => FreshName -> Free f a
 getFVar = getVar
 
+getIElem :: VarExp Ident :<: f => Ident -> Free f a -> Free f a
+getIElem = getElem
+
+getFElem :: VarExp FreshName :<: f => FreshName -> Free f a -> Free f a
+getFElem = getElem
+
 setIVar :: VarStm Ident :<: f => Ident -> Free f () -> Free f ()
 setIVar = setVar
 
 setFVar :: VarStm FreshName :<: f => FreshName -> Free f () -> Free f ()
 setFVar = setVar
+
+setIElem :: VarStm Ident :<: f => Ident -> Free f () -> Free f () -> Free f ()
+setIElem = setElem
+
+setFElem :: VarStm FreshName :<: f => FreshName ->  Free f () -> Free f () -> Free f ()
+setFElem = setElem
 
 callI :: ProcStm Ident :<: f => Ident -> Free f ()
 callI = call
@@ -53,6 +65,11 @@ renameSpec = do
                 e = getFVar (v 0) :: FWhile
             renameAST a `shouldBe` Right e
 
+        it "renames array subscript" $ do
+            let a = getIElem "x"   (getIVar "i")   :: IWhile
+                e = getFElem (v 0) (getFVar (v 1)) :: FWhile
+            renameAST a `shouldBe` Right e
+
         it "renames variables in arithmetic expressions" $ do
             let a = add (getIVar "x") (getIVar "y") :: IWhile
                 e = add (getFVar (v 0)) (getFVar (v 1)) :: FWhile
@@ -63,9 +80,19 @@ renameSpec = do
                 e = equ (getFVar (v 0)) (getFVar (v 1)) :: FWhile
             renameAST a `shouldBe` Right e
 
-        it "renames setting variables" $ do
-            let a = setIVar "x"   (num 1) :: IWhile
-                e = setFVar (v 0) (num 1) :: FWhile
+        it "renames assigning variables to aexp" $ do
+            let a = setIVar "x"   (assignAExp (num 1)) :: IWhile
+                e = setFVar (v 0) (assignAExp (num 1)) :: FWhile
+            renameAST a `shouldBe` Right e
+
+        it "renames assigning variables to array" $ do
+            let a = setIVar "x"   (assignArr [getVar "y", num 1]) :: IWhile
+                e = setFVar (v 0) (assignArr [getVar (v 1), num 1]) :: FWhile
+            renameAST a `shouldBe` Right e
+
+        it "renames setting array value" $ do
+            let a = setIElem "x"   (getVar "i")   (num 1) :: IWhile
+                e = setFElem (v 0) (getVar (v 1)) (num 1) :: FWhile
             renameAST a `shouldBe` Right e
 
         it "renames procedures" $ do
@@ -90,55 +117,55 @@ renameSpec = do
 
         it "renames variables in if statements" $ do
             let a = ifElse (equ (getIVar "x") (num 1))
-                        (setIVar "x" (num 1))
-                        (setIVar "y" (num 2)) :: IWhile
+                        (setIVar "x" (assignAExp (num 1)))
+                        (setIVar "y" (assignAExp (num 2))) :: IWhile
                 e = ifElse (equ (getFVar (v 0)) (num 1))
-                        (setFVar (v 0) (num 1))
-                        (setFVar (v 1) (num 2)) :: FWhile
+                        (setFVar (v 0) (assignAExp (num 1)))
+                        (setFVar (v 1) (assignAExp (num 2))) :: FWhile
             renameAST a `shouldBe` Right e
 
         it "renames variables in while statements" $ do
             let a = while (equ (getIVar "x") (num 1))
-                        (setIVar "y" (num 1)) :: IWhile
+                        (setIVar "y" (assignAExp (num 1))) :: IWhile
                 e = while (equ (getFVar (v 0)) (num 1))
-                        (setFVar (v 1) (num 1)) :: FWhile
+                        (setFVar (v 1) (assignAExp (num 1))) :: FWhile
             renameAST a `shouldBe` Right e
 
         it "renames variables in block body" $ do
-            let a = setIVar "x" (num 1) `comp`
-                        blockI [] [] (setIVar "x" (num 1)) :: IWhile
+            let a = setIVar "x" (assignAExp (num 1)) `comp`
+                        blockI [] [] (setIVar "x" (assignAExp (num 1))) :: IWhile
 
-                e = setFVar (v 0) (num 1) `comp`
-                        blockF [] [] (setFVar (v 0) (num 1)) :: FWhile
+                e = setFVar (v 0) (assignAExp (num 1)) `comp`
+                        blockF [] [] (setFVar (v 0) (assignAExp (num 1))) :: FWhile
 
             renameAST a `shouldBe` Right e
 
         it "gives new names to local variables in block" $ do
-            let a = setIVar "x" (num 1) `comp`
-                        blockI [("x", num 1)] [] (setIVar "x"   (num 1)) :: IWhile
+            let a = setIVar "x" (assignAExp (num 1)) `comp`
+                        blockI [("x", num 1)] [] (setIVar "x" (assignAExp (num 1))) :: IWhile
 
-                e = setFVar (v 0) (num 1) `comp`
-                        blockF [(v 1, num 1)] [] (setFVar (v 1) (num 1)) :: FWhile
+                e = setFVar (v 0) (assignAExp (num 1)) `comp`
+                        blockF [(v 1, num 1)] [] (setFVar (v 1) (assignAExp (num 1))) :: FWhile
 
             renameAST a `shouldBe` Right e
 
         it "uses local names inside procedures" $ do
-            let a = setIVar "x" (num 1) `comp`
+            let a = setIVar "x" (assignAExp (num 1)) `comp`
                         blockI
-                           [("x", num 1)]
-                           [("p", setIVar "x" (num 1))]
-                           (setIVar "x"   (num 1)) :: IWhile
+                           [("x", assignAExp (num 1))]
+                           [("p", setIVar "x" (assignAExp (num 1)))]
+                           (setIVar "x"   (assignAExp (num 1))) :: IWhile
 
-                e = setFVar (v 0) (num 1) `comp`
+                e = setFVar (v 0) (assignAExp (num 1)) `comp`
                         blockF
-                           [(v 1, num 1)]
-                           [(p 0, setFVar (v 1) (num 1))]
-                           (setFVar (v 1) (num 1)) :: FWhile
+                           [(v 1, assignAExp (num 1))]
+                           [(p 0, setFVar (v 1) (assignAExp (num 1)))]
+                           (setFVar (v 1) (assignAExp (num 1))) :: FWhile
 
             renameAST a `shouldBe` Right e
 
         it "restores names after block" $ do
-            let a = setIVar "x"   (num 1) `comp` blockI [("x", num 2)] [] skip `comp` setIVar "x"   (num 3) :: IWhile
-                e = setFVar (v 0) (num 1) `comp` blockF [(v 1, num 2)] [] skip `comp` setFVar (v 0) (num 3) :: FWhile
+            let a = setIVar "x"   (assignAExp (num 1)) `comp` blockI [("x", num 2)] [] skip `comp` setIVar "x"   (assignAExp (num 3)) :: IWhile
+                e = setFVar (v 0) (assignAExp (num 1)) `comp` blockF [(v 1, num 2)] [] skip `comp` setFVar (v 0) (assignAExp (num 3)) :: FWhile
 
             renameAST a `shouldBe` Right e

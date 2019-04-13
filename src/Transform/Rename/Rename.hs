@@ -39,6 +39,11 @@ instance VarExp FreshName :<: f => FreeAlg (VarExp Ident) (Carrier (Free f a)) w
         v' <- fresh (VarName v)
         return (getVar v')
 
+    alg (GetElem v i) = do
+        v' <- fresh (VarName v)
+        i' <- i
+        return (getElem v' i')
+
 instance AExp :<: f => FreeAlg AExp (Carrier (Free f a)) where
     alg (Num n)   = return (num n)
     alg (Add x y) = add <$> x <*> y
@@ -53,11 +58,21 @@ instance BExp :<: f => FreeAlg BExp (Carrier (Free f a)) where
     alg (And x y) = andB <$> x <*> y
     alg (Not x)   = notB <$> x
 
+instance Assign :<: f => FreeAlg Assign (Carrier (Free f a)) where
+    alg (AssignAExp x) = assignAExp <$> x
+    alg (AssignArr xs) = assignArr  <$> mapM id xs
+
 instance VarStm FreshName :<: f => FreeAlg (VarStm Ident) (Carrier (Free f a)) where
     alg (SetVar v x) = do
         v' <- fresh (VarName v)
         rnX <- x
         return (setVar v' rnX)
+
+    alg (SetElem v i x) = do
+        v' <- fresh (VarName v)
+        rnI <- i
+        rnX <- x
+        return (setElem v' rnI rnX)
 
 -- Renames procedure names and checks that the procedure has been seen before.
 -- Acts as a demonstration of execeptions.
