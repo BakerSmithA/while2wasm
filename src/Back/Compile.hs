@@ -94,13 +94,10 @@ instance FreeAlg (VarStm SrcVar) (CodeGen WASM) where
     alg (SetVar v x) = varType v >>= \v' -> setVarVal v' x
 
 instance FreeAlg (ProcStm SrcProc) (CodeGen WASM) where
-    alg = undefined
-    -- alg (Call pname) = do
-    --     (_, paramNames) <- funcVarLocations pname
-    --     -- Because emitting instructions is a side effect, mapM_ emits
-    --     -- all arguments to function.
-    --     mapM_ (\v -> varType v >>= emitGetVarAsArg) paramNames
-    --     emit (call (wasmName pname))
+    alg (Call pname) = do
+        (_, params) <- funcVars pname
+        foldM (\acc v -> return acc >>> (varType v >>= varAsArg)) (return ()) params
+            >>> return (call (wasmName pname))
 
 -- NOTE: Using Prog to represent WebAssembly allows generation to be very
 -- natural, with output looking like WebAssembly code.
@@ -127,15 +124,6 @@ instance FreeAlg (BlockStm SrcVar SrcProc) (CodeGen WASM) where
         foldM (\acc (v, x) -> return acc >>> genVarDecl v x) (return ()) varDecls
             >>> body
 
--- Return function which returns type of a variable.
-makeVarType :: Set SrcVar -> Set SrcVar -> Set SrcVar -> (SrcVar -> LocType (ValType SrcVar))
-makeVarType _ _ _ v = Local (Val v)
-
--- Return function which returns offset of a variable from the stack pointer,
--- provided the variable has a local pointer type.
-makeVarSPOffset :: Set SrcVar -> Set SrcVar -> (SrcVar -> SPOffset)
-makeVarSPOffset = undefined
-
 genProc :: SrcProc -> CodeGen WASM -> CodeGen ()
 genProc pname body = do
     (locals, params) <- funcVars pname
@@ -146,11 +134,25 @@ genProc pname body = do
 
     funcScope varType spOffset (do
         bodyWasm <- body
-        let func = Func (wasmName pname) False [] [] bodyWasm
+        let locals' = funcLocals locals
+            params' = funcLocals params
+            func    = Func (wasmName pname) False locals' params' bodyWasm
         emitFunc func)
 
 genVarDecl :: SrcVar -> CodeGen WASM -> CodeGen WASM
 genVarDecl v x = varType v >>= \v' -> setVarVal v' x
+
+-- Return function which returns type of a variable.
+makeVarType :: Set SrcVar -> Set SrcVar -> Set SrcVar -> (SrcVar -> LocType (ValType SrcVar))
+makeVarType _ _ _ v = Local (Val v)
+
+-- Return function which returns offset of a variable from the stack pointer,
+-- provided the variable has a local pointer type.
+makeVarSPOffset :: Set SrcVar -> Set SrcVar -> (SrcVar -> SPOffset)
+makeVarSPOffset = undefined
+
+funcLocals :: Set SrcVar -> [LocalName]
+funcLocals = map wasmName . Set.elems
 
 mkCodeGen :: FreeAlg f (CodeGen WASM) => Free f a -> CodeGen WASM
 mkCodeGen = evalF (const (return (return ())))
@@ -174,31 +176,16 @@ compile' mainLocals mainParams dirty funcVars = handleCodeGen env . mkCodeGen wh
     spOffset = makeVarSPOffset mainLocals mainParams
     spName   = "sp"
 
-compile :: FreeAlg f (CodeGen WASM) => Free f () -> Module
-compile prog = Module funcs [] [] [] where
-    funcs = mainFunc:nestedFuncs
-    mainFunc = Func "main" False [] [] mainWasm
-    (mainWasm, nestedFuncs) = compile' mainLocals mainParams dirty funcVars prog
-    ((mainLocals, mainParams), funcVars) = undefined
-    dirty = undefined
+compile :: FreeAlg f (CodeGen WASM)
+        => (Set SrcVar, Set SrcVar)
+        -> Map SrcProc (Set SrcVar, Set SrcVar)
+        -> Set SrcVar
+        -> Free f () -> Module
 
---     alg (Block varDecls procDecls body) = do
---         -- Procedures are emitted into separate functions distinct from
---         -- the function this blocks' variable declarations and body are
---         -- emitted into.
---         -- mapM_ (uncurry emitFunc) procDecls
---
---         mapM_ (uncurry emitSetVar) varDecls
---         body
---
--- mkCodeGen :: FreeAlg f CodeGen => Free f a -> CodeGen
--- mkCodeGen = evalF (const (return ()))
---
--- compile' :: FreeAlg f CodeGen => Free f () -> WASM
--- compile' = handleCodeGen . mkCodeGen
---
--- compile :: FreeAlg f CodeGen => Free f () -> Module
--- compile prog = Module funcs [] [] [] where
---     funcs    = [mainFunc]
---     mainFunc = Func "main" False [] [] body
---     body     = compile' prog
+compile mainVars funcVars dirtyVars prog = Module funcs [] [] [] where
+    funcs = mainFunc:nestedFuncs
+    mainFunc = Func "main" False locals params mainWasm
+    locals   = funcLocals mainLocals
+    params   = funcLocals mainParams
+    (mainWasm, nestedFuncs) = compile' mainLocals mainParams dirtyVars funcVars prog
+    (mainLocals, mainParams) = mainVars
