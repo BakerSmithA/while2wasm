@@ -47,6 +47,8 @@ runComp inPath outPath = do
             putStrLn "\n-- WASM --"
             putStrLn (Pretty.toString 1 $ wat)
 
+            writeFile outPath (Pretty.toString 0 wat)
+
 main :: IO ()
 main = do
     args <- getArgs

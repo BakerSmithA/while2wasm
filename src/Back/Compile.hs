@@ -11,6 +11,7 @@ import qualified Data.Map as Map
 import Control.Monad (foldM)
 import Front.AST hiding (call, ifElse, block)
 import Back.WASM hiding (Export)
+import qualified Back.WASM as WASM (Export(..))
 import Back.CodeGen
 import Helper.Free.Free
 import Helper.Free.Alg
@@ -129,6 +130,9 @@ instance FreeAlg (BlockStm SrcVar SrcProc) (CodeGen WASM) where
         foldM (\acc (v, x) -> return acc >>> genVarDecl v x) (return ()) varDecls
             >>> body
 
+genVarDecl :: SrcVar -> CodeGen WASM -> CodeGen WASM
+genVarDecl v x = varType v >>= \v' -> setVarVal v' x
+
 genProc :: SrcProc -> CodeGen WASM -> CodeGen ()
 genProc pname body = do
     (locals, params) <- funcVars pname
@@ -138,14 +142,30 @@ genProc pname body = do
         spOffset = makeVarSPOffset locals params
 
     funcScope varType spOffset (do
-        bodyWasm <- body
-        let locals' = funcLocals locals
-            params' = funcLocals params
-            func    = Func (wasmName pname) False locals' params' bodyWasm
+        let locals'   = funcLocals locals
+            params'   = funcLocals params
+            stackSize = funcStackSize locals dirty
+
+        bodyWasm <- funcWrapper stackSize body
+
+        let func = Func (wasmName pname) False locals' params' bodyWasm
         emitFunc func)
 
-genVarDecl :: SrcVar -> CodeGen WASM -> CodeGen WASM
-genVarDecl v x = varType v >>= \v' -> setVarVal v' x
+-- TODO: Could this be used with Prog?
+-- Wrap body of the function with extending and retracting stack according to
+-- size of variables stored on stack by the function.
+funcWrapper :: SPOffset -> CodeGen WASM -> CodeGen WASM
+funcWrapper size body = modifySP ADD size >>> body >>> modifySP SUB size
+
+modifySP :: BinOp -> SPOffset -> CodeGen WASM
+modifySP _  0   = return (return ())
+modifySP op val = do
+    sp <- spName
+    return (do
+        getGlobal sp
+        constNum (fromIntegral val)
+        binOp op
+        setGlobal sp)
 
 -- Return function which returns type of a variable.
 makeVarType :: Set SrcVar -> Set SrcVar -> Set SrcVar -> (SrcVar -> LocType (ValType SrcVar))
@@ -166,6 +186,11 @@ makeVarSPOffset locals dirty v =
         Nothing     -> error ("Variable not stored on stack: " ++ show v)
         Just offset -> offset
 
+-- Total size of variables stored on the stack. Used to tell how much the
+-- entry and exit of function should increase/decrease SP.
+funcStackSize :: Set SrcVar -> Set SrcVar -> SPOffset
+funcStackSize locals dirty = fromIntegral $ 4 * Set.size (Set.intersection locals dirty)
+
 funcLocals :: Set SrcVar -> [LocalName]
 funcLocals = map wasmName . Set.elems
 
@@ -173,8 +198,10 @@ mkCodeGen :: FreeAlg f (CodeGen WASM) => Free f a -> CodeGen WASM
 mkCodeGen = evalF (const (return (return ())))
 
 compile' :: FreeAlg f (CodeGen WASM)
+         -- Stack pointer name
+         => GlobalName
          -- Variables local to main
-         => Set SrcVar
+         -> Set SrcVar
          -- Parameters to main
          -> Set SrcVar
          -- Dirty variables
@@ -185,11 +212,12 @@ compile' :: FreeAlg f (CodeGen WASM)
          -> Free f ()
          -> (WASM, [Func])
 
-compile' mainLocals mainParams dirty funcVars = handleCodeGen env . mkCodeGen where
-    env      = Env [] varType spOffset spName dirty funcVars
-    varType  = makeVarType mainLocals mainParams dirty
-    spOffset = makeVarSPOffset mainLocals dirty
-    spName   = "sp"
+compile' spName mainLocals mainParams dirty funcVars ast = handleCodeGen env codeGen where
+    codeGen   = funcWrapper stackSize (mkCodeGen ast)
+    stackSize = funcStackSize mainLocals dirty
+    env       = Env [] varType spOffset spName dirty funcVars
+    varType   = makeVarType mainLocals mainParams dirty
+    spOffset  = makeVarSPOffset mainLocals dirty
 
 compile :: FreeAlg f (CodeGen WASM)
         => (Set SrcVar, Set SrcVar)
@@ -197,10 +225,16 @@ compile :: FreeAlg f (CodeGen WASM)
         -> Set SrcVar
         -> Free f () -> Module
 
-compile mainVars funcVars dirtyVars prog = Module funcs [] [] [] where
+compile mainVars funcVars dirtyVars prog = Module funcs globals memories exports where
     funcs = mainFunc:nestedFuncs
-    mainFunc = Func "main" False locals params mainWasm
+    mainFunc = Func "main" True locals params mainWasm
     locals   = funcLocals mainLocals
     params   = funcLocals mainParams
-    (mainWasm, nestedFuncs) = compile' mainLocals mainParams dirtyVars funcVars prog
+    (mainWasm, nestedFuncs) = compile' spName mainLocals mainParams dirtyVars funcVars prog
     (mainLocals, mainParams) = mainVars
+
+    globals  = [Global spName Mut 0]
+    memories = [Memory "memory" 1]
+    exports  = [WASM.Export "main" (ExportFunc "main"), WASM.Export "memory" (ExportMem "memory")]
+
+    spName = "sp"
