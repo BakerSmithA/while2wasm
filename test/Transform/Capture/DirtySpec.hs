@@ -24,10 +24,14 @@ dirtySpec = do
                 a = setVar "x" (num 1) `comp` block' [] [p] skip :: IWhile
             dirtyVars a `shouldBe` (Set.singleton "x" :: Set Ident)
 
-        it "includes variables modified in proc and after after outside" $ do
+        it "includes variables modified in proc and used after outside" $ do
             let p = ("p", setVar "x" (num 1))
                 a = block' [] [p] (call "p" `comp` export (getVar "x"))
             dirtyVars a `shouldBe` (Set.singleton "x" :: Set Ident)
+
+        it "does not include variables modified in body of block" $ do
+            let a = setVar "x" (num 1) `comp` block' [] [] (setVar "x" (num 2))
+            dirtyVars a `shouldBe` (Set.empty :: Set Ident)
 
         it "incldues variables modified in proc and declared in var decls" $ do
             let p = ("p", setVar "x" (num 2))
