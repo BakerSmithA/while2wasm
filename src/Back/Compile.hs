@@ -59,11 +59,14 @@ localPtrAddr :: SrcVar -> CodeGen WASM
 localPtrAddr v = do
     sp     <- spName
     offset <- varSPOffset v
-    return (do
-        getGlobal sp
-        constNum (fromIntegral offset)
-        binOp SUB)
-
+    -- NOTE: Optimisation, if the offset is 0, then there is no reason to subtract.
+    return $ case offset of
+        0 -> getGlobal sp
+        x -> do
+            getGlobal sp
+            constNum (fromIntegral offset)
+            binOp SUB
+            
 -- Emit instruction to set value of a variable to value on top of stack.
 -- I.e. store value at memory address pointed to, or set value of variable.
 setVarVal :: LocType (ValType SrcVar) -> CodeGen WASM -> CodeGen WASM
