@@ -1,11 +1,13 @@
 
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, FlexibleContexts, TypeOperators #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, FlexibleContexts #-}
+{-# LANGUAGE TypeOperators, ParallelListComp #-}
 
 module Back.Compile where
 
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Map (Map)
+import qualified Data.Map as Map
 import Control.Monad (foldM)
 import Front.AST hiding (call, ifElse, block)
 import Back.WASM hiding (Export)
@@ -149,12 +151,20 @@ genVarDecl v x = varType v >>= \v' -> setVarVal v' x
 makeVarType :: Set SrcVar -> Set SrcVar -> Set SrcVar -> (SrcVar -> LocType (ValType SrcVar))
 makeVarType locals params dirty v = locType (valType v) where
     locType = if Set.member v locals then Local else Param
-    valType = if Set.member v dirty then Ptr else Val
+    valType = if Set.member v dirty  then Ptr   else Val
 
 -- Return function which returns offset of a variable from the stack pointer,
--- provided the variable has a local pointer type.
+-- provided the variable has a local pointer type, i.e. Local (Ptr v)
 makeVarSPOffset :: Set SrcVar -> Set SrcVar -> (SrcVar -> SPOffset)
-makeVarSPOffset _ _ _ = 0
+makeVarSPOffset locals dirty v =
+    let i32ByteSize = 4
+        stackVars   = Set.elems (Set.intersection locals dirty)
+        offsets     = [(v, offset*i32ByteSize) | v <- stackVars | offset <- [0..]]
+        mapping     = Map.fromList offsets
+
+    in case v `Map.lookup` mapping of
+        Nothing     -> error ("Variable not stored on stack: " ++ show v)
+        Just offset -> offset
 
 funcLocals :: Set SrcVar -> [LocalName]
 funcLocals = map wasmName . Set.elems
@@ -178,7 +188,7 @@ compile' :: FreeAlg f (CodeGen WASM)
 compile' mainLocals mainParams dirty funcVars = handleCodeGen env . mkCodeGen where
     env      = Env [] varType spOffset spName dirty funcVars
     varType  = makeVarType mainLocals mainParams dirty
-    spOffset = makeVarSPOffset mainLocals mainParams
+    spOffset = makeVarSPOffset mainLocals dirty
     spName   = "sp"
 
 compile :: FreeAlg f (CodeGen WASM)
