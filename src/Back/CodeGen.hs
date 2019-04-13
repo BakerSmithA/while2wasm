@@ -14,6 +14,7 @@ module Back.CodeGen
 , ValType(..)
 , Emit
 , Block
+, Env(..)
 , emitFunc
 , spName
 , varSPOffset
@@ -120,16 +121,21 @@ data Env = Env {
   , currVarType  :: SrcVar -> (LocType (ValType SrcVar))
   , spOffset     :: SrcVar -> SPOffset
   , globalSPName :: GlobalName
+  , dirty        :: Set SrcVar
+  , funcVarLocs  :: Map SrcProc (Set SrcVar, Set SrcVar)
 }
-
-emptyEnv :: (SrcVar -> (LocType (ValType SrcVar))) -> (SrcVar -> SPOffset) -> GlobalName -> Env
-emptyEnv varType spOffset spName = Env [] varType spOffset spName
 
 addFunc :: Func -> Env -> Env
 addFunc func env = env { funcs = func:(funcs env) }
 
 restoreEnv :: Env -> Env -> Env
 restoreEnv old new = old { funcs = funcs new }
+
+lookupFuncVars :: SrcProc -> Env -> (Set SrcVar, Set SrcVar)
+lookupFuncVars pname env =
+    case Map.lookup pname (funcVarLocs env) of
+        Nothing   -> error ("No function named " ++ show pname)
+        Just locs -> locs
 
 --------------------------------------------------------------------------------
 -- Semantics
@@ -144,6 +150,8 @@ data Carrier' a :: Nat -> * where
 gen :: a -> Carrier a 'Z
 gen wasm = CG (\env -> (CZ wasm, env))
 
+-- NOTE: Pattern matching on Other is not required here because this is not a
+-- composite effect handler.
 alg :: Alg Emit Block (Carrier a)
 alg = A a d p where
     a :: Emit (Carrier a n) -> Carrier a n
@@ -151,10 +159,9 @@ alg = A a d p where
     a (VarSPOffset v fk)  = CG $ \env -> runCG (fk (spOffset env v)) env
     a (VarType v fk)      = CG $ \env -> runCG (fk (currVarType env v)) env
     a (SPName fk)         = CG $ \env -> runCG (fk (globalSPName env)) env
-    a (DirtyVars fk)      = CG $ \env -> runCG (fk Set.empty) env
-    a (FuncVars pname fk) = CG $ \env -> runCG (fk (Set.empty, Set.empty)) env
+    a (DirtyVars fk)      = CG $ \env -> runCG (fk (dirty env)) env
+    a (FuncVars pname fk) = CG $ \env -> runCG (fk (lookupFuncVars pname env)) env
 
-    -- TODO: FuncScope should modify inner env to use varType and spOffset
     d :: Block (Carrier a ('S n)) -> Carrier a n
     d (FuncScope varType spOffset inner) = CG $ \env ->
         let env' = env { currVarType=varType, spOffset=spOffset }
@@ -165,8 +172,7 @@ alg = A a d p where
     p :: Carrier a n -> Carrier a ('S n)
     p (CG runCG) = CG $ \env -> (CS runCG, env)
 
-handleCodeGen :: (SrcVar -> (LocType (ValType SrcVar))) -> (SrcVar -> SPOffset) -> GlobalName -> Prog Emit Block a -> (a, [Func])
-handleCodeGen varType spOffset spName prog =
-    let env = emptyEnv varType spOffset spName
-    in case runCG (run gen alg prog) env of
-        (CZ wasm, env) -> (wasm, funcs env)
+handleCodeGen :: Env -> Prog Emit Block a -> (a, [Func])
+handleCodeGen env prog =
+    case runCG (run gen alg prog) env of
+        (CZ wasm, env') -> (wasm, funcs env')

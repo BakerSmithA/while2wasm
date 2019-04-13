@@ -5,6 +5,7 @@ module Back.Compile where
 
 import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.Map (Map)
 import Control.Monad (foldM)
 import Front.AST hiding (call, ifElse, block)
 import Back.WASM hiding (Export)
@@ -154,8 +155,21 @@ genVarDecl v x = varType v >>= \v' -> setVarVal v' x
 mkCodeGen :: FreeAlg f (CodeGen WASM) => Free f a -> CodeGen WASM
 mkCodeGen = evalF (const (return (return ())))
 
-compile' :: FreeAlg f (CodeGen WASM) => Set SrcVar -> Set SrcVar -> Set SrcVar -> Free f () -> (WASM, [Func])
-compile' mainLocals mainParams dirty = handleCodeGen varType spOffset spName . mkCodeGen where
+compile' :: FreeAlg f (CodeGen WASM)
+         -- Variables local to main
+         => Set SrcVar
+         -- Parameters to main
+         -> Set SrcVar
+         -- Dirty variables
+         -> Set SrcVar
+         -- Variables local and parameters to each function
+         -> Map SrcProc (Set SrcVar, Set SrcVar)
+         -- While AST to compile
+         -> Free f ()
+         -> (WASM, [Func])
+
+compile' mainLocals mainParams dirty funcVars = handleCodeGen env . mkCodeGen where
+    env      = Env [] varType spOffset spName dirty funcVars
     varType  = makeVarType mainLocals mainParams dirty
     spOffset = makeVarSPOffset mainLocals mainParams
     spName   = "sp"
@@ -164,8 +178,8 @@ compile :: FreeAlg f (CodeGen WASM) => Free f () -> Module
 compile prog = Module funcs [] [] [] where
     funcs = mainFunc:nestedFuncs
     mainFunc = Func "main" False [] [] mainWasm
-    (mainWasm, nestedFuncs) = compile' mainLocals mainParams dirty prog
-    ((mainLocals, mainParams), funcVarTypes) = undefined
+    (mainWasm, nestedFuncs) = compile' mainLocals mainParams dirty funcVars prog
+    ((mainLocals, mainParams), funcVars) = undefined
     dirty = undefined
 
 --     alg (Block varDecls procDecls body) = do
