@@ -31,8 +31,26 @@ instance FreeAlg AExp (Carrier v) where
 instance FreeAlg BExp (Carrier v) where
     alg _ = return ()
 
+-- TODO: Problem:
+-- Cannot decide whether variable is dirty or not. AExp assignments should be, but
+-- don't have access to name.
+-- Possible solution - store name with assignment, i.e.
+--
+-- data Assign v k
+--     = AssignAExp v k
+--     | AssignArr  v [k]
+--
+-- Then, block decl stores assignments instead of (v, k) tuple.
+-- Assignment can then be ommitted from Stm type. 
+instance FreeAlg Assign (Carrier v) where
+    alg = undefined
+
 instance FreeAlg (VarStm v) (Carrier v) where
-    alg (SetVar v _) = modified v
+    alg (SetVar  v _)   = modified v
+    -- Setting an element does not count as setting a variable, firstly because
+    -- the value of the whole array was not set, and also arrays are stored as
+    -- pointers and therefore are always 'dirty' in a sense.
+    alg (SetElem _ _ _) = return ()
 
 instance FreeAlg (ProcStm p) (Carrier v) where
     alg _ = return ()
