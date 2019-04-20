@@ -4,7 +4,8 @@
 -- scoped Prog. This is different from previous Effect Handlers, as using
 -- typeclasses below allows easy extension of converting WASM to WAT.
 
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, GADTs, DataKinds #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts, MultiParamTypeClasses #-}
+{-# LANGUAGE GADTs, DataKinds #-}
 
 module Back.WAT
 ( docModule
