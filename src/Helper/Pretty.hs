@@ -1,15 +1,12 @@
 
 -- Pretty printing where document structure is described using Prog.
 
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE MultiParamTypeClasses, DeriveFunctor, TypeOperators #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances #-}
 {-# LANGUAGE DataKinds, KindSignatures, GADTs #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, FlexibleContexts #-}
-{-# LANGUAGE TypeOperators #-}
 
 module Helper.Pretty
 ( Doc
-, DocF(..)
 , Pretty(..)
 , empty
 , text
@@ -29,15 +26,14 @@ module Helper.Pretty
 
 import Data.Word (Word)
 import Helper.Scope.Prog
+import Helper.Scope.Alg
 import Helper.Co
 
 --------------------------------------------------------------------------------
 -- Syntax
 --------------------------------------------------------------------------------
 
--- TODO: Rename DocF
--- Describes how to layout a document.
-data DocF k
+data Text k
     = Text String k
     | Newline k
     deriving Functor
@@ -46,105 +42,97 @@ data Indent k
     = Indent k
     deriving Functor
 
--- Like the Writer monad.
-type Doc = Prog DocF Indent
+type Doc = Prog Text Indent
 
 class Pretty a where
     pretty :: a -> Doc ()
 
-empty :: Doc ()
+empty :: (Functor f, Functor g) => Prog f g ()
 empty = return ()
 
-text :: String -> Doc ()
-text s = Op (Text s (Var ()))
+text :: Text :<: f => String -> Prog f g ()
+text s = injectP (Text s (Var ()))
 
-showable :: Show a => a -> Doc ()
+showable :: (Show a, Text :<: f) => a -> Prog f g ()
 showable x = text (show x)
 
-line' :: Doc a -> Doc a
-line' doc = do x <- doc; nl; return x
-
-nl :: Doc ()
-nl = Op (Newline (Var ()))
+nl :: Text :<: f => Prog f g ()
+nl = injectP (Newline (Var ()))
 
 -- Single space.
-sp :: Doc ()
+sp :: Text :<: f => Prog f g ()
 sp = text " "
 
-nonEmpty :: [a] -> ([a] -> Doc ()) -> Doc ()
+-- Document containing text s followed by a newline.
+line :: (Text :<: f, Functor g) => String -> Prog f g ()
+line s = text s >> nl
+
+line' :: (Text :<: f, Functor g) => Prog f g () -> Prog f g ()
+line' doc = doc >> nl
+
+-- Wraps document inside entry and exit text.
+between :: (Text :<: f, Functor g) => String -> String -> Prog f g () -> Prog f g ()
+between start end inner = text start >> inner >> text end
+
+-- Wraps inner document in parenthesis.
+parens :: (Text :<: f, Functor g) => Prog f g () -> Prog f g ()
+parens = between "(" ")"
+
+-- Wrapper inner document in quotation marks.
+quoted :: (Text :<: f, Functor g) => Prog f g () -> Prog f g ()
+quoted = between "\"" "\""
+
+nonEmpty :: (Functor f, Functor g) => [a] -> ([a] -> Prog f g ()) -> Prog f g ()
 nonEmpty [] _ = empty
 nonEmpty xs f = f xs
 
--- Document containing text s followed by a newline.
-line :: String -> Doc ()
-line s = do text s; nl
-
--- Wraps inner document in parenthesis.
-parens :: Doc a -> Doc a
-parens inner = do text "("; x <- inner; text ")"; return x
-
--- Wrapper inner document in quotation marks.
-quoted :: Doc () -> Doc ()
-quoted inner = do text "\""; inner; text "\""
-
 -- Places separator s between each Doc in ds.
-sepBy :: [Doc ()] -> Doc () -> Doc ()
+sepBy :: (Functor f, Functor g) => [Prog f g ()] -> Prog f g () -> Prog f g ()
 sepBy []     _ = empty
 sepBy [x]    _ = x
-sepBy (x:xs) s = do x; s; sepBy xs s
+sepBy (x:xs) s = x >> s >> sepBy xs s
 
 -- Places separator s between each Doc in ds, and separator at end.
-sepByEnd :: [Doc ()] -> Doc () -> Doc ()
+sepByEnd :: (Functor f, Functor g) => [Prog f g ()] -> Prog f g () -> Prog f g ()
 sepByEnd [] _ = return ()
-sepByEnd ds s = do sepBy ds s; s
+sepByEnd ds s = sepBy ds s >> s
 
--- Indents inner by one spacing unit on top of spacing already applied.
-indented :: Doc a -> Doc a
-indented inner = Scope (fmap (fmap return) (Indent inner))
+indented :: (Indent :<: g, Functor f) => Prog f g a -> Prog f g a
+indented inner = injectPSc (fmap (fmap return) (Indent inner))
 
 --------------------------------------------------------------------------------
 -- Semantics
 --------------------------------------------------------------------------------
 
--- How many spacing units to indented by.
-type IndentLvl = Word
+type IndentLvl    = Word
+type ShouldIndent = Bool
 
--- Whether the current line has been indented, used to avoid indenting the
--- current line multiple times.
-type DidIndent = Bool
+indentBy :: IndentLvl -> ShouldIndent -> String
+indentBy _ False = ""
+indentBy i True  = replicate (fromIntegral i*2) ' '
 
-indentBy :: IndentLvl -> DidIndent -> String
-indentBy i False = concat (replicate (fromIntegral i) "  ")
-indentBy _ True  = ""
+data Carrier a n = C { runC :: IndentLvl -> ShouldIndent -> String -> (String, Carrier' a n) }
 
-data CarrierD a n
-    = D { runD :: (IndentLvl -> DidIndent -> String -> (CarrierD' a n, IndentLvl, DidIndent, String)) }
+data Carrier' a :: Nat -> * where
+    CZ :: a -> Carrier' a 'Z
+    CS :: (IndentLvl -> ShouldIndent -> String -> (String, Carrier' a n)) -> Carrier' a ('S n)
 
-data CarrierD' a :: Nat -> * where
-    CZ :: a -> CarrierD' a 'Z
-    CS :: (IndentLvl -> DidIndent -> String -> (CarrierD' a n, IndentLvl, DidIndent, String)) -> CarrierD' a ('S n)
+instance OpAlg Text (Carrier a) where
+    alg (Text str (C runK)) = C $ \lvl shouldIndent acc -> runK lvl False (acc ++ indentBy lvl shouldIndent ++ str)
+    alg (Newline  (C runK)) = C $ \lvl _            acc -> runK lvl True  (acc ++ "\n")
 
-genD :: a -> CarrierD a 'Z
-genD a = D (\lvl didIndent s -> (CZ a, lvl, didIndent, s))
+instance ScopeAlg Indent (Carrier a) where
+    dem (Indent (C runK)) = C $ \lvl shouldIndent acc ->
+        -- Run inner continuation indented one level.
+        case runK (lvl+1) shouldIndent acc of
+            -- Run remaining continuation at original level.
+            (acc', CS runK') -> runK' lvl shouldIndent acc'
 
-algD :: Alg DocF Indent (CarrierD a)
-algD = A a d p where
-    a :: DocF (CarrierD a n) -> CarrierD a n
-    -- runD is like the continuation (?)
-    a (Text s  (D runD)) = D $ \lvl didIndent acc -> runD lvl True  (acc ++ indentBy lvl didIndent ++ s)
-    a (Newline (D runD)) = D $ \lvl _         acc -> runD lvl False (acc ++ "\n")
+pro :: Carrier a n -> Carrier a ('S n)
+pro (C runC) = C $ \_ _ acc -> (acc, CS runC)
 
-    -- Exit one level of scope (?)
-    d :: Indent (CarrierD a ('S n)) -> CarrierD a n
-    d (Indent (D runD)) = D $ \lvl didIndent acc ->
-        -- Indent by 1 level
-        case runD (lvl+1) didIndent acc of
-            -- Dedent by 1 level
-            (CS runD', lvl', didIndent', acc') -> runD' (lvl'-1) didIndent' acc'
+gen :: a -> Carrier a 'Z
+gen x = C $ \_ _ acc -> (acc, CZ x)
 
-    p :: CarrierD a n -> CarrierD a ('S n)
-    p carrier = D $ \lvl didIndent acc -> (CS (runD carrier), lvl, didIndent, acc)
-
-toString :: IndentLvl -> Doc () -> String
-toString lvl doc = case (runD (run genD algD doc) lvl False "") of
-    (_, _, _, str) -> str
+toString :: (OpAlg f (Carrier a), ScopeAlg g (Carrier a)) => IndentLvl -> Prog f g a -> String
+toString lvl prog = fst (runC (eval gen pro prog) lvl True "")

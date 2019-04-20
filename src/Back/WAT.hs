@@ -5,6 +5,7 @@
 -- typeclasses below allows easy extension of converting WASM to WAT.
 
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, GADTs, DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Back.WAT
 ( docModule
