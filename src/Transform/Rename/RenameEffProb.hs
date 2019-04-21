@@ -3,8 +3,9 @@
 -- composite effects methods. Allows other effects to be added, e.g. exceptions
 -- to ensure procedures have been defined before being used.
 
--- NOTE: Shows problem with using Extensible Effects and trying to add extend
--- semantics into the same domain.
+-- NOTE: Demonstrates problem with composite effect handlers extending into
+-- the same domain. At the bottom of the file is an example of extending with
+-- Exists.
 
 {-# LANGUAGE ViewPatterns, PatternSynonyms, TypeOperators, DeriveFunctor #-}
 {-# LANGUAGE FlexibleContexts, DataKinds, KindSignatures, GADTs #-}
@@ -159,24 +160,24 @@ mkCtx :: (Functor f, Functor g, Ord v) => Prog (Fresh v :+: f) (Rename v :+: g) 
 mkCtx prog = case run gen alg prog of
     (Nest1 prog') -> fmap (\(NZ1 x) -> x) prog'
 
-handleRename :: (Functor f, Functor g, Ord v) => Prog (Fresh v :+: f) (Rename v :+: g) a -> Prog f g (a, String)
-handleRename = undefined
--- handleRename prog = do
---     -- Discard resulting Names, and next fresh.
---     -- The fresh is global, indicated by wrapping around the state. Therefore,
---     -- getting a new fresh inside scoped state still gives a globally fresh
---     -- value.
---     ((x, st), fresh) <- (F.handleFresh 0 . handleState emptyNames . mkCtx) prog
---     return x
+-- Performs renaming, and returns next fresh name (can be used to name the main function).
+handleFreshRename :: (Functor f, Functor g, Ord v) => Prog (Fresh v :+: f) (Rename v :+: g) a -> Prog f g (a, FreshName)
+handleFreshRename prog = do
+    -- Discard resulting Names, and next fresh.
+    -- The fresh is global, indicated by wrapping around the state. Therefore,
+    -- getting a new fresh inside scoped state still gives a globally fresh
+    -- value.
+    ((x, st), fresh) <- (F.handleFresh 0 . handleState emptyNames . mkCtx) prog
+    return (x, fresh)
 
 --------------------------------------------------------------------------------
 -- Exists Syntax
 --------------------------------------------------------------------------------
 
--- Extending the language with checking whether a variable has been seen before.
+-- Extending renaming effect handler with checking whether a variable/procedure has
+-- been seen before.
 
 data Exists v k
-    -- Returns whether a mapping exists.
     = Exists' v (Bool -> k)
     deriving Functor
 
@@ -188,12 +189,17 @@ exists p = injectP (Exists' p Var)
 -- Exists Semantics
 --------------------------------------------------------------------------------
 
-handleExists :: (Functor f, Functor g, Ord v) => Prog (Exists v :+: f) g a -> Prog f g a
+-- NOTE: Suffers from same problem as explored in State example. We need to
+-- either create a handler which cannot be used by itself (i.e. leaves of the
+-- Prog have to be (a, FreshName)). Or, we create a handler which can only be
+-- used by itself and not composed with handleFreshRename.
+
+handleExists :: (Functor f, Functor g, Ord v) => Prog (Exists v :+: f) g (a, FreshName) -> Prog f g (a, FreshName)
 handleExists = undefined
 
 --------------------------------------------------------------------------------
--- Composite
+-- Composite Semantics
 --------------------------------------------------------------------------------
 
-handle :: (Functor f, Functor g, Ord v) => Prog (Fresh v :+: Exists v :+: f) (Rename v :+: g) a -> Prog f g a
-handle = handleExists . handleRename
+handleRename :: (Functor f, Functor g, Ord v) => Prog (Fresh v :+: Exists v :+: f) (Rename v :+: g) a -> Prog f g (a, FreshName)
+handleRename = handleExists . handleFreshRename
