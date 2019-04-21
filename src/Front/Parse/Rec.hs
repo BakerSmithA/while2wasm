@@ -16,6 +16,7 @@ module Front.Parse.Rec
 import qualified Front.AST as A
 import Helper.Free.Free
 import Helper.Co
+import Helper.Inj
 
 type Ident = String
 

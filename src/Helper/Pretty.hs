@@ -28,6 +28,7 @@ import Data.Word (Word)
 import Helper.Scope.Prog
 import Helper.Scope.Alg
 import Helper.Co
+import Helper.Inj
 
 --------------------------------------------------------------------------------
 -- Syntax

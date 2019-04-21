@@ -6,6 +6,7 @@ import Test.Hspec
 import Front.AST
 import Helper.Free.Free
 import Helper.Co
+import Helper.Inj
 import Transform.Rename.Rename
 
 type IWhile    = While Ident Ident

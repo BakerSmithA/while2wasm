@@ -13,6 +13,7 @@ module Helper.Eff.Writer
 
 import Helper.Scope.Prog
 import Helper.Co
+import Helper.Inj
 import Helper.Eff
 import Helper.Eff.Void
 

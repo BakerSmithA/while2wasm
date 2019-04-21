@@ -6,6 +6,7 @@ import Test.Hspec
 import Transform.Rename.RenameEff
 import Helper.Scope.Prog
 import Helper.Co
+import Helper.Inj
 import Helper.Eff.Void
 
 type P = Prog (Fresh String :+: Void) (Rename String :+: Void)

@@ -26,6 +26,7 @@ import Transform.Rename.Rename (FreshName)
 import Helper.Scope.Prog
 import Helper.Scope.Nest
 import Helper.Co
+import Helper.Inj
 import Helper.Eff.Reader
 import Helper.Eff.State
 import Helper.Eff

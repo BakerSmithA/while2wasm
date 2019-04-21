@@ -23,6 +23,7 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Helper.Scope.Prog
 import Helper.Co
+import Helper.Inj
 import Helper.Eff
 import Helper.Eff.State
 import Helper.Eff.Reader

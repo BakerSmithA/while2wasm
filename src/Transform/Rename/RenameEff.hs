@@ -24,6 +24,7 @@ import Helper.Scope.Prog
 import Helper.Scope.Nest
 import Helper.Pretty
 import Helper.Co
+import Helper.Inj
 import Helper.Eff.State
 import qualified Helper.Eff.Fresh as F
 import Helper.Eff

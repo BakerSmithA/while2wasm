@@ -14,6 +14,7 @@ module Helper.Eff.Fresh
 import Data.Word
 import Helper.Scope.Prog
 import Helper.Co
+import Helper.Inj
 import Helper.Scope.Alg
 import Helper.Eff.State
 import Helper.Eff

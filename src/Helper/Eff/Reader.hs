@@ -15,6 +15,7 @@ module Helper.Eff.Reader
 
 import Helper.Scope.Prog
 import Helper.Co
+import Helper.Inj
 import Helper.Eff
 
 --------------------------------------------------------------------------------

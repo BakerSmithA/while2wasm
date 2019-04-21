@@ -7,6 +7,7 @@ module Front.AST where
 
 import Helper.Free.Free
 import Helper.Co
+import Helper.Inj
 
 -- Type of variables.
 type Ident = String
