@@ -11,6 +11,7 @@ module Helper.Scope.Alg
 , Pro
 , eval
 , evalId
+, evalHandler
 ) where
 
 import Helper.Scope.Prog
@@ -47,3 +48,28 @@ instance (OpAlg f a, OpAlg g a) => OpAlg (f :+: g) a where
 instance (ScopeAlg f a, ScopeAlg g a) => ScopeAlg (f :+: g) a where
     dem (L x) = dem x
     dem (R x) = dem x
+
+-- Handle rest of tree that isn't handled by algebra, i.e. if handling
+-- Prog (Ask r :+: f) (LocalR r :+: g) a, this function handles f.
+type HandleRestAlg h a = forall (n :: Nat) . h (a n) -> a n
+
+-- Handle rest of tree that isn't handled by demotion, i.e. if handling
+-- Prog (Ask r :+: f) (LocalR r :+: g) a, this function handles g.
+type HandleRestDem i a = forall (n :: Nat) . i (a ('S n)) -> a n
+
+-- Helper function for creating composite handlers which can be extended using
+-- Data Types a la Carte.
+evalHandler :: (Functor h, Functor i, OpAlg f a, ScopeAlg g a)
+  => (r -> a 'Z)
+  -> Pro a
+  -> HandleRestAlg h a
+  -> HandleRestDem i a
+  -> Prog (f :+: h) (g :+: i) r
+  -> a 'Z
+
+evalHandler gen pro restAlg restSc prog = run gen (A a d pro) prog where
+    a (L op) = alg op
+    a (R op) = restAlg op
+
+    d (L op) = dem op
+    d (R op) = restSc op

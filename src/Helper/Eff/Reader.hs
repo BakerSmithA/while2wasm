@@ -2,7 +2,7 @@
 -- Generic reader effect handler, useful for constant 'global' variables.
 
 {-# LANGUAGE DeriveFunctor, TypeOperators, GADTs, DataKinds, KindSignatures #-}
-{-# LANGUAGE FlexibleContexts, MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleContexts, MultiParamTypeClasses, Rank2Types #-}
 {-# LANGUAGE ViewPatterns, PatternSynonyms #-}
 
 module Helper.Eff.Reader
@@ -64,21 +64,17 @@ handleReader :: (Functor h, Functor i)
              => (OpAlg f (Carrier h i r a), ScopeAlg g (Carrier h i r a))
              => r -> Prog (f :+: h) (g :+: i) a -> Prog h i a
 
-handleReader r prog = fmap (\(CZ prog') -> prog') (runR (run gen a prog) r) where
+handleReader r prog = fmap (\(CZ prog') -> prog') (runR (evalHandler gen pro restAlg restDem prog) r) where
     gen :: (Functor h, Functor i) => a -> Carrier h i r a 'Z
     gen x = Re $ \_ -> return (CZ x)
 
-    a = A a' d' p'
+    pro :: (Functor h, Functor i) => Carrier h i r a n -> Carrier h i r a ('S n)
+    pro (Re run) = Re $ \_ -> return (CS run)
 
-    a' :: (OpAlg f (Carrier h i r a), Functor h) => (f :+: h) (Carrier h i r a n) -> Carrier h i r a n
-    a' (L x) = alg x
-    a' (R x) = Re $ \r -> Op (fmap (flip runR r) x)
+    restAlg :: Functor h => h (Carrier h i r a n) -> Carrier h i r a n
+    restAlg op = Re $ \r -> Op (fmap (flip runR r) op)
 
-    d' :: (ScopeAlg g (Carrier h i r a), Functor h, Functor i) => (g :+: i) (Carrier h i r a ('S n)) -> Carrier h i r a n
-    d' (L x) = dem x
-    d' (R x) = Re $ \r -> Scope (fmap (\(Re run) -> fmap (f r) (run r)) x) where
+    restDem :: (Functor h, Functor i) => i (Carrier h i r a ('S n)) -> Carrier h i r a n
+    restDem op = Re $ \r -> Scope (fmap (\(Re run) -> fmap (f r) (run r)) op) where
         f :: r -> Carrier' f g r a ('S n) -> Prog f g (Carrier' f g r a n)
         f r (CS run') = run' r
-
-    p' :: (Functor h, Functor i) => Carrier h i r a n -> Carrier h i r a ('S n)
-    p' (Re run) = Re $ \_ -> return (CS run)
