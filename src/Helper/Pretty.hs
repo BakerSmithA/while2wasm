@@ -65,22 +65,22 @@ sp :: Text :<: f => Prog f g ()
 sp = text " "
 
 -- Document containing text s followed by a newline.
-line :: (Text :<: f, Functor g) => String -> Prog f g ()
+line :: (Text :<: f, Functor f, Functor g) => String -> Prog f g ()
 line s = text s >> nl
 
-line' :: (Text :<: f, Functor g) => Prog f g () -> Prog f g ()
+line' :: (Text :<: f, Functor f, Functor g) => Prog f g () -> Prog f g ()
 line' doc = doc >> nl
 
 -- Wraps document inside entry and exit text.
-between :: (Text :<: f, Functor g) => String -> String -> Prog f g () -> Prog f g ()
+between :: (Text :<: f, Functor f, Functor g) => String -> String -> Prog f g () -> Prog f g ()
 between start end inner = text start >> inner >> text end
 
 -- Wraps inner document in parenthesis.
-parens :: (Text :<: f, Functor g) => Prog f g () -> Prog f g ()
+parens :: (Text :<: f, Functor f, Functor g) => Prog f g () -> Prog f g ()
 parens = between "(" ")"
 
 -- Wrapper inner document in quotation marks.
-quoted :: (Text :<: f, Functor g) => Prog f g () -> Prog f g ()
+quoted :: (Text :<: f, Functor f, Functor g) => Prog f g () -> Prog f g ()
 quoted = between "\"" "\""
 
 nonEmpty :: (Functor f, Functor g) => [a] -> ([a] -> Prog f g ()) -> Prog f g ()
@@ -98,7 +98,7 @@ sepByEnd :: (Functor f, Functor g) => [Prog f g ()] -> Prog f g () -> Prog f g (
 sepByEnd [] _ = return ()
 sepByEnd ds s = sepBy ds s >> s
 
-indented :: (Indent :<: g, Functor f) => Prog f g a -> Prog f g a
+indented :: (Indent :<: g, Functor f, Functor g) => Prog f g a -> Prog f g a
 indented inner = injectPSc (fmap (fmap return) (Indent inner))
 
 --------------------------------------------------------------------------------
