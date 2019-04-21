@@ -6,8 +6,8 @@
 module Helper.Scope.Nest
 ( Nest(..)
 , Nest'(..)
-, Nest1(..)
-, Nest1'(..)
+-- , Nest1(..)
+-- , Nest1'(..)
 ) where
 
 import Helper.Scope.Prog
@@ -19,8 +19,8 @@ data Nest' f :: Nat -> * where
     NZ :: a -> Nest' f 'Z
     NS :: f (Nest' f n) -> Nest' f ('S n)
 
-data Nest1 f a n = Nest1 { runNest1 :: f (Nest1' f a n) }
-
-data Nest1' f a :: Nat -> * where
-    NZ1 :: a -> Nest1' f a 'Z
-    NS1 :: f (Nest1' f a n) -> Nest1' f a ('S n)
+-- data Nest1 f a n = Nest1 { runNest1 :: f (Nest1' f a n) }
+--
+-- data Nest1' f a :: Nat -> * where
+--     NZ1 :: a -> Nest1' f a 'Z
+--     NS1 :: f (Nest1' f a n) -> Nest1' f a ('S n)

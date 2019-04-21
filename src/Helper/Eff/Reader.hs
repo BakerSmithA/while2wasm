@@ -50,6 +50,9 @@ data Carrier' f g r a :: Nat -> * where
     CZ :: a -> Carrier' f g r a 'Z
     CS :: (r -> Prog f g (Carrier' f g r a n)) -> Carrier' f g r a ('S n)
 
+unCZ :: Carrier' f g r a 'Z -> a
+unCZ (CZ x) = x
+
 instance OpAlg (Ask r) (Carrier f g r a) where
     alg (Ask fk) = Re $ \r -> runR (fk r) r
 
@@ -64,12 +67,12 @@ handleReader :: (Functor h, Functor i)
              => (OpAlg f (Carrier h i r a), ScopeAlg g (Carrier h i r a))
              => r -> Prog (f :+: h) (g :+: i) a -> Prog h i a
 
-handleReader r prog = fmap (\(CZ prog') -> prog') (runR (evalHandler gen pro restAlg restDem prog) r) where
+handleReader r prog = fmap unCZ (runR (evalHandler gen pro restAlg restDem prog) r) where
     gen :: (Functor h, Functor i) => a -> Carrier h i r a 'Z
     gen x = Re $ \_ -> return (CZ x)
 
     pro :: (Functor h, Functor i) => Carrier h i r a n -> Carrier h i r a ('S n)
-    pro (Re run) = Re $ \_ -> return (CS run)
+    pro (Re prog) = Re $ \_ -> return (CS prog)
 
     restAlg :: Functor h => h (Carrier h i r a n) -> Carrier h i r a n
     restAlg op = Re $ \r -> Op (fmap (flip runR r) op)
