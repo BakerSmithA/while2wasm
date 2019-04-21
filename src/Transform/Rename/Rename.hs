@@ -90,6 +90,10 @@ instance BlockStm FreshName FreshName :<: f => FreeAlg (BlockStm Ident Ident) (C
 makeRename :: (Functor g, FreeAlg f (Carrier (Free g a))) => Free f a -> Carrier (Free g a)
 makeRename = evalF (return . return)
 
-renameAST :: (Functor g, FreeAlg f (Carrier (Free g a))) => Free f a -> Either RenameErr (Free g a)
--- Handle renaming variable and procedures.
-renameAST = handleVoid . handleExc . handleRename . handleRename . makeRename
+-- Returns the next fresh procedure name, used as the name of the main function.
+renameAST :: (Functor g, FreeAlg f (Carrier (Free g a))) => Free f a -> Either RenameErr (Free g a, FreshName)
+renameAST prog =
+    let handle = handleVoid . handleExc . handleRename . handleRename
+    in case handle (makeRename prog) of
+        Left  err                    -> Left err
+        Right ((prog', _), nextProc) -> Right (prog', nextProc)

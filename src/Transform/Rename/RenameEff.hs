@@ -167,11 +167,12 @@ mkCtx :: (Functor f, Functor g, Ord v) => Prog (Fresh v :+: f) (Rename v :+: g) 
 mkCtx prog = case run gen alg prog of
     (Nest1 prog') -> fmap (\(NZ1 x) -> x) prog'
 
-handleRename :: (Functor f, Functor g, Ord v) => Prog (Fresh v :+: f) (Rename v :+: g) a -> Prog f g a
+-- Performs renaming, and returns next fresh name (can be used to name the main function).
+handleRename :: (Functor f, Functor g, Ord v) => Prog (Fresh v :+: f) (Rename v :+: g) a -> Prog f g (a, FreshName)
 handleRename prog = do
     -- Discard resulting Names, and next fresh.
     -- The fresh is global, indicated by wrapping around the state. Therefore,
     -- getting a new fresh inside scoped state still gives a globally fresh
     -- value.
     ((x, st), fresh) <- (F.handleFresh 0 . handleState emptyNames . mkCtx) prog
-    return x
+    return (x, fresh)
