@@ -35,7 +35,7 @@ runComp inPath outPath = do
             let dirty = dirtyVars renamed :: Set FreshName
                 (mainVars, funcVars) = procVarLocations renamed
 
-            let wasmModule = compile mainVars funcVars dirty renamed
+            let wasmModule = compile nextProc mainVars funcVars dirty renamed
                 wat        = docModule wasmModule
 
             putStrLn "-- Parsed --"

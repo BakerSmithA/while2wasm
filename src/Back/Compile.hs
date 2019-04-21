@@ -223,14 +223,15 @@ compile' spName mainLocals mainParams dirty funcVars ast = handleCodeGen env cod
     spOffset  = makeVarSPOffset mainLocals dirty
 
 compile :: FreeAlg f (CodeGen WASM)
-        => (Set SrcVar, Set SrcVar)
+        => SrcProc
+        -> (Set SrcVar, Set SrcVar)
         -> Map SrcProc (Set SrcVar, Set SrcVar)
         -> Set SrcVar
         -> Free f () -> Module
 
-compile mainVars funcVars dirtyVars prog = Module funcs globals memories exports where
+compile mainName mainVars funcVars dirtyVars prog = Module funcs globals memories exports where
     funcs = mainFunc:nestedFuncs
-    mainFunc = Func "main" True locals params mainWasm
+    mainFunc = Func mainName' True locals params mainWasm
     locals   = funcLocals mainLocals
     params   = funcLocals mainParams
     (mainWasm, nestedFuncs) = compile' spName mainLocals mainParams dirtyVars funcVars prog
@@ -238,6 +239,7 @@ compile mainVars funcVars dirtyVars prog = Module funcs globals memories exports
 
     globals  = [Global spName Mut 0]
     memories = [Memory "memory" 1]
-    exports  = [WASM.Export "main" (ExportFunc "main"), WASM.Export "memory" (ExportMem "memory")]
+    exports  = [WASM.Export "main" (ExportFunc mainName'), WASM.Export "memory" (ExportMem "memory")]
 
-    spName = "sp"
+    spName    = "sp"
+    mainName' = wasmName mainName
