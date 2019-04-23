@@ -89,9 +89,8 @@ insFresh v = do
 
 -- Creates a mapping from each variable to a fresh name, and updates state,
 -- returning updated state.
-insManyFresh :: (Functor f, Functor g, Ord v)
-             => [v] -> Prog (State (Names v) :+: F.Fresh :+: f) (LocalSt (Names v) :+: g) (Names v)
-insManyFresh vs = do mapM_ insFresh vs; get
+insManyFresh :: (Functor f, Functor g, Ord v)  => [v] -> Prog (State (Names v) :+: F.Fresh :+: f) (LocalSt (Names v) :+: g) ()
+insManyFresh vs = mapM_ insFresh vs
 
 -- Overwrites duplicate entries with old variable names.
 restoreNames :: Ord v => Names v -> Names v -> Names v
@@ -142,20 +141,14 @@ alg = A a d p where
 
     d :: (Functor f, Functor g, Ord v) => (Rename v :+: g) (Carrier f g  v a ('S n)) -> Carrier f g v a n
     d (Rename vs k) = Nest1 $ do
-        saved <- getNames
-        ins   <- insManyFresh vs
+        names <- getNames
+        insManyFresh vs
 
-        -- Run nested continuation with local state.
-        -- run' is the continuation remaining after the local continuation.
-        -- Before running this the state is restored.
-        (NS1 run', localEnv) <- localSt ins (do
-            r <- runNest1 k
-            e <- getNames
-            return (r, e))
+        (NS1 runK') <- runNest1 k
+        names' <- getNames
 
-        -- Run remaining continuation with restored state.
-        put (restoreNames saved localEnv)
-        run'
+        put (restoreNames names names')
+        runK'
 
     d (Other op) = Nest1 (Scope (fmap (\(Nest1 prog) -> fmap f prog) (R op))) where
         f :: (Functor f, Functor g) => Nest1' (Ctx f g v) a ('S n) -> Ctx f g v (Nest1' (Ctx f g v) a n)
