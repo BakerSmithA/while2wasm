@@ -1,14 +1,14 @@
 
--- Generic fresh effect handler, used to produce fresh Words starting a 0.
+-- Generic fresh effect handler, used to produce new, fresh values.
 
 {-# LANGUAGE DeriveFunctor, TypeOperators, FlexibleContexts, FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses, DataKinds #-}
 {-# LANGUAGE PatternSynonyms, ViewPatterns #-}
 
-module Helper.Eff.Fresh
-( Fresh
-, fresh
-, handleFresh
+module Helper.Eff.New
+( New
+, new
+, handleNew
 ) where
 
 import Helper.Scope.Prog
@@ -22,14 +22,14 @@ import Helper.Eff
 -- Syntax
 --------------------------------------------------------------------------------
 
-data Fresh e k
+data New e k
     -- Product a fresh value of type e.
-    = Fresh' (e -> k)
+    = New' (e -> k)
     deriving Functor
 
-pattern Fresh fk <- (prj -> Just (Fresh' fk))
-fresh :: (Functor f, Functor g, Fresh e :<: f) => Prog f g e
-fresh = injectP (Fresh' Var)
+pattern New fk <- (prj -> Just (New' fk))
+new :: (Functor f, Functor g, New e :<: f) => Prog f g e
+new = injectP (New' Var)
 
 --------------------------------------------------------------------------------
 -- Semantics
@@ -39,16 +39,16 @@ fresh = injectP (Fresh' Var)
 
 type Carrier f g e a = CarrierId (Prog (State e :+: f) (LocalSt e :+: g) a)
 
--- Use Datatypes a la Carte methods, i.e. typeclasses, to convert from Fresh
+-- Use Datatypes a la Carte methods, i.e. typeclasses, to convert from New
 -- to State.
 
 getE :: (Functor f, Functor g) => Prog (State e :+: f) (LocalSt e :+: g) e
 getE = get
 
-algF :: (Functor f, Functor g, Enum e) => Alg (Fresh e :+: f) g (Carrier f g e a)
+algF :: (Functor f, Functor g, Enum e) => Alg (New e :+: f) g (Carrier f g e a)
 algF = A a d p where
-    a :: (Functor f, Functor g, Enum e) => (Fresh e :+: f) (Carrier f g e a n) -> Carrier f g e a n
-    a (Fresh fk) = Id $ do
+    a :: (Functor f, Functor g, Enum e) => (New e :+: f) (Carrier f g e a n) -> Carrier f g e a n
+    a (New fk) = Id $ do
         next <- getE
         put (succ next)
         let (Id r) = fk next
@@ -61,9 +61,9 @@ algF = A a d p where
     p :: (Functor f, Functor g) => Carrier f g e a n -> Carrier f g e a ('S n)
     p (Id prog) = Id prog
 
-mkState :: (Functor f, Functor g, Enum e) => Prog (Fresh e :+: f) g a -> Prog (State e :+: f) (LocalSt e :+: g) a
+mkState :: (Functor f, Functor g, Enum e) => Prog (New e :+: f) g a -> Prog (State e :+: f) (LocalSt e :+: g) a
 mkState = runId (Id . return) algF
 
--- Takes initial fresh value, this will be returned the first time `fresh` is called.
-handleFresh :: (Functor f, Functor g, Enum e) => e -> Prog (Fresh e:+: f) g a -> Prog f g (a, e)
-handleFresh n = handleState n . mkState
+-- Takes initial fresh value, this will be returned the first time `new` is called.
+handleNew :: (Functor f, Functor g, Enum e) => e -> Prog (New e:+: f) g a -> Prog f g (a, e)
+handleNew n = handleState n . mkState

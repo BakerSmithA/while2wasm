@@ -3,7 +3,7 @@ module Main where
 import Test.Hspec
 import Front.Parse.ParserSpec
 import Helper.Eff.StateSpec
-import Helper.Eff.FreshSpec
+import Helper.Eff.NewSpec
 import Helper.Eff.ReaderSpec
 import Helper.Eff.WriterSpec
 import Transform.Rename.RenameEffSpec
@@ -18,7 +18,7 @@ main = hspec specs where
     specs = do
         parserSpec
         stateSpec
-        freshSpec
+        newSpec
         readerSpec
         writerSpec
         renameEffSpec

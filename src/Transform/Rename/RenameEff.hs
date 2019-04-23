@@ -26,7 +26,7 @@ import Helper.Pretty
 import Helper.Co
 import Helper.Inj
 import Helper.Eff.State
-import qualified Helper.Eff.Fresh as F
+import Helper.Eff.New
 import Helper.Eff
 
 --------------------------------------------------------------------------------
@@ -80,16 +80,16 @@ emptyNames = Map.empty
 
 -- Creates a mapping from v to a fresh variable name, and updates state.
 insFresh :: (Functor f, Functor g, Ord v)
-         => v -> Prog (State (Names v) :+: F.Fresh Word :+: f) (LocalSt (Names v) :+: g) FreshName
+         => v -> Prog (State (Names v) :+: New Word :+: f) (LocalSt (Names v) :+: g) FreshName
 insFresh v = do
     env <- get
-    next <- F.fresh
+    next <- new
     put (Map.insert v next env)
     return next
 
 -- Creates a mapping from each variable to a fresh name, and updates state,
 -- returning updated state.
-insManyFresh :: (Functor f, Functor g, Ord v)  => [v] -> Prog (State (Names v) :+: F.Fresh Word :+: f) (LocalSt (Names v) :+: g) ()
+insManyFresh :: (Functor f, Functor g, Ord v)  => [v] -> Prog (State (Names v) :+: New Word :+: f) (LocalSt (Names v) :+: g) ()
 insManyFresh vs = mapM_ insFresh vs
 
 -- Overwrites duplicate entries with old variable names.
@@ -106,7 +106,7 @@ restoreNames old new = Map.union old new
 -- even inside local scope of a state, globally fresh values will be produced.
 -- Also see `handleRename` function.
 
-type Op  f v   = State (Names v)   :+: F.Fresh Word :+: f
+type Op  f v   = State (Names v)   :+: New Word :+: f
 type Sc  g v   = LocalSt (Names v) :+: g
 type Ctx f g v = Prog (Op f v) (Sc g v)
 
@@ -168,5 +168,5 @@ handleRename prog = do
     -- The fresh is global, indicated by wrapping around the state. Therefore,
     -- getting a new fresh inside scoped state still gives a globally fresh
     -- value.
-    ((x, st), fresh) <- (F.handleFresh 0 . handleState emptyNames . mkCtx) prog
+    ((x, st), fresh) <- (handleNew 0 . handleState emptyNames . mkCtx) prog
     return (x, fresh)

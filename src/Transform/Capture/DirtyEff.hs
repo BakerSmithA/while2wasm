@@ -28,7 +28,7 @@ import Helper.Inj
 import Helper.Eff
 import Helper.Eff.State
 import Helper.Eff.Reader
-import Helper.Eff.Fresh
+import Helper.Eff.New
 import Helper.Eff.Writer
 
 --------------------------------------------------------------------------------
@@ -85,7 +85,7 @@ emptyLastScope = Map.empty
 -- Only need a reader for keeping track of the current scope index, because
 -- the index only changes when entering scope, therefore this can be done
 -- using scope of reader.
-type Op  f v     = State   (LastScope v) :+: Ask    ScopeIdx :+: Fresh Word :+: Tell (DirtyVars v) :+: f
+type Op  f v     = State   (LastScope v) :+: Ask    ScopeIdx :+: New Word :+: Tell (DirtyVars v) :+: f
 type Sc  g v     = LocalSt (LastScope v) :+: LocalR ScopeIdx :+: g
 type Ctx f g v a = Prog (Op f v) (Sc g v) a
 
@@ -102,8 +102,8 @@ getLastScope = get
 getScopeIdx :: (Functor f, Functor g) => Ctx f g v ScopeIdx
 getScopeIdx = ask
 
-freshScopeIdx :: (Functor f, Functor g) => Ctx f g v ScopeIdx
-freshScopeIdx = fresh
+newScopeIdx :: (Functor f, Functor g) => Ctx f g v ScopeIdx
+newScopeIdx = new
 
 addDirtyVar :: (Functor f, Functor g, Ord v) => v -> Ctx f g v ()
 addDirtyVar = tell . Set.singleton
@@ -146,7 +146,7 @@ algD = A a d p where
     d (ModScope k) = D $ do
         -- Does not change the scope index assigned to this scope, only the
         -- next fresh scope index that will be used.
-        newScIdx <- freshScopeIdx
+        newScIdx <- newScopeIdx
         -- Run nested continuation with new scope index.
         (CS run') <- localR newScIdx (runD k)
         -- Run rest of non-nested continuation.
@@ -172,5 +172,5 @@ handleDirtyVars prog = do
     -- DirtyVars. This ensures local versions are not made inside any local
     -- state scopes.
     let srtScopeIdx = 0
-    (((x, _), _), vs) <- (handleWriter . handleFresh (succ srtScopeIdx) . handleReader srtScopeIdx . handleState emptyLastScope . mkCtx) prog
+    (((x, _), _), vs) <- (handleWriter . handleNew (succ srtScopeIdx) . handleReader srtScopeIdx . handleState emptyLastScope . mkCtx) prog
     return (x, vs)
