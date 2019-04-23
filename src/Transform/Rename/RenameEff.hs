@@ -80,7 +80,7 @@ emptyNames = Map.empty
 
 -- Creates a mapping from v to a fresh variable name, and updates state.
 insFresh :: (Functor f, Functor g, Ord v)
-         => v -> Prog (State (Names v) :+: F.Fresh :+: f) (LocalSt (Names v) :+: g) FreshName
+         => v -> Prog (State (Names v) :+: F.Fresh Word :+: f) (LocalSt (Names v) :+: g) FreshName
 insFresh v = do
     env <- get
     next <- F.fresh
@@ -89,7 +89,7 @@ insFresh v = do
 
 -- Creates a mapping from each variable to a fresh name, and updates state,
 -- returning updated state.
-insManyFresh :: (Functor f, Functor g, Ord v)  => [v] -> Prog (State (Names v) :+: F.Fresh :+: f) (LocalSt (Names v) :+: g) ()
+insManyFresh :: (Functor f, Functor g, Ord v)  => [v] -> Prog (State (Names v) :+: F.Fresh Word :+: f) (LocalSt (Names v) :+: g) ()
 insManyFresh vs = mapM_ insFresh vs
 
 -- Overwrites duplicate entries with old variable names.
@@ -106,7 +106,7 @@ restoreNames old new = Map.union old new
 -- even inside local scope of a state, globally fresh values will be produced.
 -- Also see `handleRename` function.
 
-type Op  f v   = State (Names v)   :+: F.Fresh :+: f
+type Op  f v   = State (Names v)   :+: F.Fresh Word :+: f
 type Sc  g v   = LocalSt (Names v) :+: g
 type Ctx f g v = Prog (Op f v) (Sc g v)
 

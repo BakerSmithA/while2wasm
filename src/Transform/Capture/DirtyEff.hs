@@ -17,6 +17,7 @@ module Transform.Capture.DirtyEff
 , handleDirtyVars
 ) where
 
+import Data.Word (Word)
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Set (Set)
@@ -84,7 +85,7 @@ emptyLastScope = Map.empty
 -- Only need a reader for keeping track of the current scope index, because
 -- the index only changes when entering scope, therefore this can be done
 -- using scope of reader.
-type Op  f v     = State   (LastScope v) :+: Ask    ScopeIdx :+: Fresh :+: Tell (DirtyVars v) :+: f
+type Op  f v     = State   (LastScope v) :+: Ask    ScopeIdx :+: Fresh Word :+: Tell (DirtyVars v) :+: f
 type Sc  g v     = LocalSt (LastScope v) :+: LocalR ScopeIdx :+: g
 type Ctx f g v a = Prog (Op f v) (Sc g v) a
 

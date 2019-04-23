@@ -9,10 +9,13 @@ import Helper.Co
 import Helper.Eff.Fresh
 import Helper.Eff.Void
 
-type P = Prog (Fresh :+: Void) Void
+type P = Prog (Fresh Word :+: Void) Void
 
 runP :: P a -> (a, Word)
 runP = handleVoid . handleFresh 0
+
+fresh' :: Prog (Fresh Word :+: Void) Void Word
+fresh' = fresh
 
 freshSpec :: Spec
 freshSpec = do
@@ -22,5 +25,5 @@ freshSpec = do
             runP p `shouldBe` (0, 1)
 
         it "increments fresh number" $ do
-            let p = do _ <- fresh; f2 <- fresh; return f2 :: P Word
+            let p = do _ <- fresh'; f2 <- fresh'; return f2 :: P Word
             runP p `shouldBe` (1, 2)
