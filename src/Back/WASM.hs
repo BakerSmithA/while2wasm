@@ -53,6 +53,7 @@ module Back.WASM
 
 import Data.Word (Word32)
 import Helper.Scope.Prog
+import Helper.Inj
 import Helper.Co
 
 --------------------------------------------------------------------------------

@@ -34,6 +34,7 @@ import Back.WASM hiding (funcs)
 import Transform.Rename.Rename (FreshName)
 import Helper.Scope.Prog
 import Helper.Co
+import Helper.Inj
 
 --------------------------------------------------------------------------------
 -- Syntax
