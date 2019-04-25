@@ -71,7 +71,7 @@ algExc = A a d p where
     a :: (Functor f, Functor g) => (Throw e :+: f) (CarrierExc f g e a n) -> CarrierExc f g e a n
     -- Don't perform continuation if an error is thrown.
     a (Throw err) = Exc (return (Left err))
-    a (Other op)  = Exc (Op (fmap runExc op))
+    a (Other op)  = Exc (Op' (fmap runExc op))
 
     d :: (Functor f, Functor g) => (Catch e :+: g) (CarrierExc f g e a ('S n)) -> CarrierExc f g e a n
     d = undefined

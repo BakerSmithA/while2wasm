@@ -186,49 +186,49 @@ data Module = Module {
 -- Smart constructors
 
 nop :: Instr :<: f => Prog f g ()
-nop = injectP (NOP (Var ()))
+nop = injectP (NOP (Var' ()))
 
 constNum :: ArithInstr :<: f => Integer -> Prog f g ()
-constNum i = injectP (CONST i (Var ()))
+constNum i = injectP (CONST i (Var' ()))
 
 uniOp :: (ArithInstr :<: f, Functor g) => UniOp -> Prog f g ()
 uniOp NOT = do constNum 0; relOp EQU
 
 binOp :: ArithInstr :<: f => BinOp -> Prog f g ()
-binOp op = injectP (BIN_OP op (Var ()))
+binOp op = injectP (BIN_OP op (Var' ()))
 
 relOp :: ArithInstr :<: f => RelOp -> Prog f g ()
-relOp op = injectP (REL_OP op (Var ()))
+relOp op = injectP (REL_OP op (Var' ()))
 
 getLocal :: VarInstr :<: f => LocalName -> Prog f g ()
-getLocal name = injectP (GET_LOCAL name (Var ()))
+getLocal name = injectP (GET_LOCAL name (Var' ()))
 
 setLocal :: VarInstr :<: f => LocalName -> Prog f g ()
-setLocal name = injectP (SET_LOCAL name (Var ()))
+setLocal name = injectP (SET_LOCAL name (Var' ()))
 
 getGlobal :: VarInstr :<: f => GlobalName -> Prog f g ()
-getGlobal name = injectP (GET_GLOBAL name (Var ()))
+getGlobal name = injectP (GET_GLOBAL name (Var' ()))
 
 setGlobal :: VarInstr :<: f => GlobalName -> Prog f g ()
-setGlobal name = injectP (SET_GLOBAL name (Var ()))
+setGlobal name = injectP (SET_GLOBAL name (Var' ()))
 
 load :: MemInstr :<: f => MemOffset -> Prog f g ()
-load offset = injectP (LOAD offset (Var ()))
+load offset = injectP (LOAD offset (Var' ()))
 
 store :: MemInstr :<: f => MemOffset -> Prog f g ()
-store offset = injectP (STORE offset (Var ()))
+store offset = injectP (STORE offset (Var' ()))
 
 br :: BranchInstr :<: f => Label -> Prog f g ()
-br label = injectP (BR label (Var ()))
+br label = injectP (BR label (Var' ()))
 
 brIf :: BranchInstr :<: f => Label -> Prog f g ()
-brIf label = injectP (BR_IF label (Var ()))
+brIf label = injectP (BR_IF label (Var' ()))
 
 ret :: BranchInstr :<: f => Prog f g ()
-ret = injectP (RET (Var ()))
+ret = injectP (RET (Var' ()))
 
 call :: BranchInstr :<: f => FuncName -> Prog f g ()
-call name = injectP (CALL name (Var ()))
+call name = injectP (CALL name (Var' ()))
 
 block :: (ControlInstr :<: g, Functor f) => Prog f g () -> Prog f g ()
 block body = injectPSc (fmap (fmap return) (BLOCK body))

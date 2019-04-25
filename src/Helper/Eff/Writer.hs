@@ -28,7 +28,7 @@ data Tell w k
 
 pattern Tell w k <- (prj -> Just (Tell' w k))
 tell :: (Functor f, Functor g, Tell w :<: f) => w -> Prog f g ()
-tell w = injectP (Tell' w (Var ()))
+tell w = injectP (Tell' w (Var' ()))
 
 --------------------------------------------------------------------------------
 -- Semantics
@@ -47,10 +47,10 @@ algW = A a d p where
         (x, w') <- unId k
         return (x, w `mappend` w')
 
-    a (Other op) = Id (Op (fmap unId op))
+    a (Other op) = Id (Op' (fmap unId op))
 
     d :: (Functor f, Functor g) => g (Carrier f g w a ('S n)) -> Carrier f g w a n
-    d op = Id $ (Scope (fmap (return . unId) op))
+    d op = Id $ (Scope' (fmap (return . unId) op))
 
     p :: (Functor f, Functor g) => Carrier f g w a n -> Carrier f g w a ('S n)
     p (Id p) = Id p

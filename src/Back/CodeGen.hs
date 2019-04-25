@@ -88,22 +88,22 @@ data Block k
     deriving Functor
 
 emitFunc :: Emit :<: f => Func -> Prog f g ()
-emitFunc func = injectP (EmitFunc func (Var ()))
+emitFunc func = injectP (EmitFunc func (Var' ()))
 
 spName :: Emit :<: f => Prog f g GlobalName
-spName = injectP (SPName Var)
+spName = injectP (SPName Var')
 
 varSPOffset :: Emit :<: f => SrcVar -> Prog f g Word
-varSPOffset v = injectP (VarSPOffset v Var)
+varSPOffset v = injectP (VarSPOffset v Var')
 
 funcVars :: Emit :<: f => SrcProc -> Prog f g (Set SrcVar, Set SrcVar)
-funcVars pname = injectP (FuncVars pname Var)
+funcVars pname = injectP (FuncVars pname Var')
 
 varType :: Emit :<: f => SrcVar -> Prog f g (LocType (ValType SrcVar))
-varType v = injectP (VarType v Var)
+varType v = injectP (VarType v Var')
 
 dirtyVars :: Emit :<: f => Prog f g (Set SrcVar)
-dirtyVars = injectP (DirtyVars Var)
+dirtyVars = injectP (DirtyVars Var')
 
 funcScope :: (Functor f, Block :<: g)
           => (SrcVar -> LocType (ValType SrcVar))

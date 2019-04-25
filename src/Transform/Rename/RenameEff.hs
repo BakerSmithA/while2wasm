@@ -59,11 +59,11 @@ data Rename v k
 -- These help make pattern matching in effect handler more readable.
 pattern Fresh v fk <- (prj -> Just (Fresh' v fk))
 fresh :: (Functor f, Functor g) => Fresh v :<: f => v -> Prog f g FreshName
-fresh v = injectP (Fresh' v Var)
+fresh v = injectP (Fresh' v Var')
 
 pattern Exists p fk <- (prj -> Just (Exists' p fk))
 exists :: (Functor f, Functor g) => Fresh v :<: f => v -> Prog f g Bool
-exists p = injectP (Exists' p Var)
+exists p = injectP (Exists' p Var')
 
 pattern Rename vs k <- (prj -> Just (Rename' vs k))
 rename :: (Functor f, Functor g, Rename v :<: g) => [v] -> Prog f g a -> Prog f g a
@@ -137,7 +137,7 @@ alg = A a d p where
         let exists = v `Map.member` env
         runNest1 (fk exists)
 
-    a (Other op) = Nest1 (Op (fmap runNest1 (R (R op))))
+    a (Other op) = Nest1 (Op' (fmap runNest1 (R (R op))))
 
     d :: (Functor f, Functor g, Ord v) => (Rename v :+: g) (Carrier f g  v a ('S n)) -> Carrier f g v a n
     d (Rename vs k) = Nest1 $ do
@@ -150,7 +150,7 @@ alg = A a d p where
         put (restoreNames names names')
         runK'
 
-    d (Other op) = Nest1 (Scope (fmap (\(Nest1 prog) -> fmap f prog) (R op))) where
+    d (Other op) = Nest1 (Scope' (fmap (\(Nest1 prog) -> fmap f prog) (R op))) where
         f :: (Functor f, Functor g) => Nest1' (Ctx f g v) a ('S n) -> Ctx f g v (Nest1' (Ctx f g v) a n)
         f (NS1 prog) = prog
 

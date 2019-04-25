@@ -41,8 +41,8 @@ injectF = Free . inj
 
 -- Inject into the non-scoped instruction of a Prog tree.
 injectP :: (f :<: h) => f (Prog h g a) -> Prog h g a
-injectP = Op . inj
+injectP = Op' . inj
 
 -- Inject into the scoped instruction of a Prog tree.
 injectPSc :: (h :<: g) => h (Prog f g (Prog f g a)) -> Prog f g a
-injectPSc = Scope . inj
+injectPSc = Scope' . inj

@@ -4,9 +4,8 @@
 
 {-# LANGUAGE DeriveFunctor, ExistentialQuantification #-}
 {-# LANGUAGE DataKinds, Rank2Types, KindSignatures, GADTs #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE MultiParamTypeClasses, StandaloneDeriving #-}
+{-# LANGUAGE UndecidableInstances, ViewPatterns, PatternSynonyms #-}
 
 module Helper.Scope.Prog
 ( Prog(..)
@@ -19,37 +18,47 @@ module Helper.Scope.Prog
 , runId
 ) where
 
-import Data.Functor.Classes (Eq1, eq1, liftEq)
+--------------------------------------------------------------------------------
+-- Prog using Smart Views
+--------------------------------------------------------------------------------
 
 data Prog f g a
-    -- Leaf node
-    = Var a
-    -- Normal non-scoped instruction, in case of programming languages
-    | Op (f (Prog f g a))
-    -- Represents scope. Here `a` is `Prog f g a`, which says that the leaf
-    -- must be another whole program!
-    | Scope (g (Prog f g (Prog f g a)))
-    deriving Functor
+    = Var' a
+    | Op' (f (Prog f g a))
+    | Scope' (g (Prog f g (Prog f g a)))
+    | forall x. (Prog f g x) :>>= (x -> Prog f g a)
 
--- TODO: Show Scope
-instance (Show a, Show (f (Prog f g a)), Show (g (Prog f g a))) => Show (Prog f g a) where
-        show (Var x)    = "Var (" ++ show x ++ ")"
-        show (Op op)    = "Op (" ++ show op ++ ")"
-        show (Scope sc) = "Scope (TODO)"
+deriving instance (Functor f, Functor g) => Functor (Prog f g)
 
 instance (Functor f, Functor g) => Applicative (Prog f g) where
-    pure  = Var
+    pure  = Var'
 
-    Var   f <*> x = fmap f x
-    Op    f <*> x = Op (fmap (<*> x) f)
-    Scope f <*> x = Scope (fmap (fmap (<*> x)) f)
+    Var'   f   <*> x = fmap f x
+    Op'    f   <*> x = Op' (fmap (<*> x) f)
+    Scope' f   <*> x = Scope' (fmap (fmap (<*> x)) f)
+    (p :>>= f) <*> x = p :>>= fmap (<*> x) f
 
 instance (Functor f, Functor g) => Monad (Prog f g) where
-    return = Var
+    return = Var'
+    (>>=) = (:>>=)
 
-    Var x    >>= f = f x
-    Op op    >>= f = Op (fmap (>>=f) op)
-    Scope sc >>= f = Scope (fmap (fmap (>>=f)) sc)
+data ProgView f g a
+    = VarV a
+    | OpV (f (Prog f g a))
+    | ScopeV (g (Prog f g (Prog f g a)))
+
+pattern Var   a  <- (viewP -> VarV a)
+pattern Op    op <- (viewP -> OpV op)
+pattern Scope sc <- (viewP -> ScopeV sc)
+
+viewP :: (Functor f, Functor g) => Prog f g a -> ProgView f g a
+viewP (Var' x)            = VarV x
+viewP (Op' op)            = OpV op
+viewP (Scope' sc)         = ScopeV sc
+viewP ((m :>>= f) :>>= g) = viewP (m :>>= \x -> f x :>>= g)
+viewP (Var'   a  :>>= f)  = viewP (f a)
+viewP (Op'    op :>>= f)  = OpV (fmap (:>>= f) op)
+viewP (Scope' sc :>>= f)  = ScopeV (fmap (fmap (:>>= f)) sc)
 
 --------------------------------------------------------------------------------
 -- Evaluation
@@ -100,16 +109,3 @@ data CarrierId a (n :: Nat) = Id { unId :: a }
 runId :: (Functor f, Functor g) => (r -> CarrierId a 'Z) -> Alg f g (CarrierId a) -> Prog f g r -> a
 runId gen alg prog = case run gen alg prog of
     (Id x) -> x
-
---------------------------------------------------------------------------------
--- Equivalence
---------------------------------------------------------------------------------
-
-instance (Eq1 f, Eq1 g) => Eq1 (Prog f g) where
-    liftEq eq (Var   x) (Var   y) = x `eq` y
-    liftEq eq (Op    x) (Op    y) = liftEq (liftEq eq) x y
-    liftEq eq (Scope x) (Scope y) = liftEq (liftEq (liftEq eq)) x y
-    liftEq _  _         _         = False
-
-instance (Eq a, Eq1 f, Eq1 g) => Eq (Prog f g a) where
-    (==) = eq1

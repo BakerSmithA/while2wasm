@@ -52,13 +52,13 @@ empty :: (Functor f, Functor g) => Prog f g ()
 empty = return ()
 
 text :: Text :<: f => String -> Prog f g ()
-text s = injectP (Text s (Var ()))
+text s = injectP (Text s (Var' ()))
 
 showable :: (Show a, Text :<: f) => a -> Prog f g ()
 showable x = text (show x)
 
 nl :: Text :<: f => Prog f g ()
-nl = injectP (Newline (Var ()))
+nl = injectP (Newline (Var' ()))
 
 -- Single space.
 sp :: Text :<: f => Prog f g ()

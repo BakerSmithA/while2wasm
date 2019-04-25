@@ -34,7 +34,7 @@ data LocalR r k
 
 pattern Ask fk <- (prj -> Just (Ask' fk))
 ask :: (Functor f, Functor g, Ask r :<: f) => Prog f g r
-ask = injectP (Ask' Var)
+ask = injectP (Ask' Var')
 
 pattern LocalR r k <- (prj -> Just (LocalR' r k))
 localR :: (Functor f, Functor g, LocalR r :<: g) => r -> Prog f g a -> Prog f g a
@@ -58,7 +58,7 @@ algR :: (Functor f, Functor g) => Alg (Ask r :+: f) (LocalR r :+: g) (Carrier f 
 algR = A a d p where
     a :: (Functor f, Functor g) => (Ask s :+: f) (Carrier f g s a n) -> Carrier f g s a n
     a (Ask fk)   = Re $ \r -> runR (fk r) r
-    a (Other op) = Re $ \r -> Op (fmap (\(Re run) -> run r) op)
+    a (Other op) = Re $ \r -> Op' (fmap (\(Re run) -> run r) op)
 
     d :: (Functor f, Functor g) => (LocalR s :+: g) (Carrier f g s a ('S n)) -> Carrier f g s a n
     d (LocalR r' k) = Re $ \r -> do
@@ -67,7 +67,7 @@ algR = A a d p where
         -- Run remaining continuation with original environment.
         run' r
 
-    d (Other op) = Re $ \r -> Scope (fmap (\(Re run) -> fmap (f r) (run r)) op) where
+    d (Other op) = Re $ \r -> Scope' (fmap (\(Re run) -> fmap (f r) (run r)) op) where
         f :: r -> Carrier' f g r a ('S n) -> Prog f g (Carrier' f g r a n)
         f r (CS run') = run' r
 

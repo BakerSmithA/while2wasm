@@ -29,7 +29,7 @@ data New e k
 
 pattern New fk <- (prj -> Just (New' fk))
 new :: (Functor f, Functor g, New e :<: f) => Prog f g e
-new = injectP (New' Var)
+new = injectP (New' Var')
 
 --------------------------------------------------------------------------------
 -- Semantics
@@ -53,10 +53,10 @@ algF = A a d p where
         put (succ next)
         let (Id r) = fk next
         r
-    a (Other op) = Id $ (Op (fmap unId (R op)))
+    a (Other op) = Id $ (Op' (fmap unId (R op)))
 
     d :: (Functor f, Functor g) => g (Carrier f g e a ('S n)) -> Carrier f g e a n
-    d op = Id (Scope (fmap (return . unId) (R op)))
+    d op = Id (Scope' (fmap (return . unId) (R op)))
 
     p :: (Functor f, Functor g) => Carrier f g e a n -> Carrier f g e a ('S n)
     p (Id prog) = Id prog

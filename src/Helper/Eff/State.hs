@@ -40,11 +40,11 @@ data LocalSt s k
 
 pattern Get fk <- (prj -> Just (Get' fk))
 get :: (Functor f, Functor g, State s :<: f) => Prog f g s
-get = injectP (Get' Var)
+get = injectP (Get' Var')
 
 pattern Put s k <- (prj -> Just (Put' s k))
 put :: (Functor f, Functor g, State s :<: f) => s -> Prog f g ()
-put s = injectP (Put' s (Var ()))
+put s = injectP (Put' s (Var' ()))
 
 modify :: (Functor f, Functor g, State s :<: f) => (s -> s) -> Prog f g ()
 modify f = do
@@ -74,7 +74,7 @@ algSt = A a d p where
     a :: (Functor f, Functor g) => (State s :+: f) (Carrier f g s a n) -> Carrier f g s a n
     a (Get fk)   = St $ \s -> runSt (fk s) s
     a (Put s' k) = St $ \_ -> runSt k s'
-    a (Other op) = St $ \s -> Op (fmap (\(St run) -> run s) op)
+    a (Other op) = St $ \s -> Op' (fmap (\(St run) -> run s) op)
 
     d :: (Functor f, Functor g) => (LocalSt s :+: g) (Carrier f g s a ('S n)) -> Carrier f g s a n
     d (LocalSt s' k) = St $ \s -> do
@@ -83,7 +83,7 @@ algSt = A a d p where
         -- Run remaining continuation (after nested continuation) in original state.
         run' s
 
-    d (Other op) = St $ \s -> Scope (fmap (\(St run) -> fmap f (run s)) op) where
+    d (Other op) = St $ \s -> Scope' (fmap (\(St run) -> fmap f (run s)) op) where
         f :: (Carrier' f g s a ('S n), s) -> Prog f g (Carrier' f g s a n, s)
         f (CS run, s) = run s
 

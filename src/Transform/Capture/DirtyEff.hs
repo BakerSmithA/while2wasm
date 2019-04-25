@@ -49,7 +49,7 @@ data ModScope k
 
 pattern Modified v k <- (prj -> Just (Modified' v k))
 modified :: (Functor f, Functor g, Modified v :<: f) => v -> Prog f g ()
-modified v = injectP (Modified' v (Var ()))
+modified v = injectP (Modified' v (Var' ()))
 
 pattern ModScope k <- (prj -> Just (ModScope' k))
 modScope :: (Functor f, Functor g, ModScope :<: g) => Prog f g a -> Prog f g a
@@ -138,7 +138,7 @@ algD = A a d p where
                         addDirtyVar v
                         runD k
 
-    a (Other op) = D (Op (fmap runD (R $ R $ R $ R op)))
+    a (Other op) = D (Op' (fmap runD (R $ R $ R $ R op)))
 
     d ::  (Functor f, Functor g) => (ModScope :+: g) (CarrierD f g v a ('S n)) -> CarrierD f g v a n
     -- Enters scope, in which if a variable is modified and modified in above
@@ -152,7 +152,7 @@ algD = A a d p where
         -- Run rest of non-nested continuation.
         run'
 
-    d (Other op) = D (Scope (fmap (\(D prog) -> fmap f prog) (R $ R op))) where
+    d (Other op) = D (Scope' (fmap (\(D prog) -> fmap f prog) (R $ R op))) where
         f :: (Functor f, Functor g) => CarrierD' f g v a ('S n) -> Ctx f g v (CarrierD' f g v a n)
         f (CS prog) = prog
 

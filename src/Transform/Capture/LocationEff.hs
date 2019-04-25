@@ -61,15 +61,15 @@ data DiscardLocals k
 
 pattern Seen v k <- (prj -> Just (Seen' v k))
 seen :: (Functor f, Functor g, LocOp :<: f) => FreshName -> Prog f g ()
-seen v = injectP (Seen' v (Var ()))
+seen v = injectP (Seen' v (Var' ()))
 
 pattern AddLocal v k <- (prj -> Just (AddLocal' v k))
 addLocal :: (Functor f, Functor g, LocOp :<: f) => FreshName -> Prog f g ()
-addLocal v = injectP (AddLocal' v (Var ()))
+addLocal v = injectP (AddLocal' v (Var' ()))
 
 pattern GetLocations fk <- (prj -> Just (GetLocations' fk))
 getLocations :: (Functor f, Functor g, LocOp :<: f) => Prog f g Locations
-getLocations = injectP (GetLocations' Var)
+getLocations = injectP (GetLocations' Var')
 
 pattern DiscardLocals k <- (prj -> Just (DiscardLocals' k))
 discardLocals :: (Functor f, Functor g, DiscardLocals :<: g) => Prog f g a -> Prog f g a
@@ -152,7 +152,7 @@ alg = A a d p where
 
     -- Manually inject op into `f` in `Op f`. Cannot use `injectP` because the
     -- types cannot be deduced.
-    a (Other op) = Nest1 (Op (fmap runNest1 (R $ R op)))
+    a (Other op) = Nest1 (Op' (fmap runNest1 (R $ R op)))
 
     d :: (Functor f, Functor g) => (DiscardLocals :+: g) (Carrier f g a ('S n)) -> Carrier f g a n
     -- Inside scope there are no local or foreign variables.
@@ -187,7 +187,7 @@ alg = A a d p where
 
         runK'
 
-    d (Other op) = Nest1 (Scope (fmap (\(Nest1 prog) -> fmap f prog) (R $ R op))) where
+    d (Other op) = Nest1 (Scope' (fmap (\(Nest1 prog) -> fmap f prog) (R $ R op))) where
         f :: (Functor f, Functor g) => Nest1' (Ctx f g) a ('S n) -> Ctx f g (Nest1' (Ctx f g) a n)
         f (NS1 prog) = prog
 
