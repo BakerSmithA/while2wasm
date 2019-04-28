@@ -92,13 +92,6 @@ type Ctx f g v = Prog (Op f v) (Sc g v)
 
 type CarrierD f g v a = Nest1 (Ctx f g v) a
 
--- data CarrierD f g v a n
---     = Nest1 { runNest1 :: Ctx f g v (CarrierD' f g v a n) }
---
--- data CarrierD' f g v a :: Nat -> * where
---     NZ1 :: a -> CarrierD' f g v a 'Z
---     NS1 :: (Ctx f g v (CarrierD' f g v a n)) -> CarrierD' f g v a ('S n)
-
 getLastScope :: (Functor f, Functor g) => Ctx f g v (LastScope v)
 getLastScope = get
 
@@ -107,9 +100,6 @@ getScopeIdx = ask
 
 newScopeIdx :: (Functor f, Functor g) => Ctx f g v ScopeIdx
 newScopeIdx = new
-
-addDirtyVar :: (Functor f, Functor g, Ord v) => v -> Ctx f g v ()
-addDirtyVar = tell . Set.singleton
 
 genD :: (Functor f, Functor g) => a -> CarrierD f g v a 'Z
 genD x = Nest1 (return (NZ1 x))
@@ -120,25 +110,25 @@ algD = A a d p where
     -- Tells environment a variable was modified. If modified in two different
     -- scopes then make a dirty variable.
     a (Modified v k) = Nest1 $ do
-        lastScope <- getLastScope
-        case v `Map.lookup` lastScope of
+        varScopes <- getLastScope
+        case v `Map.lookup` varScopes of
             -- Variable never seen before, therefore the scope the variable
             -- was seen at is the current scope index.
             Nothing    -> do
-                currIdx <- getScopeIdx
-                put (Map.insert v currIdx lastScope)
+                currScopeIdx <- getScopeIdx
+                put (Map.insert v currScopeIdx varScopes)
                 runNest1 k
 
             -- Variable has been seen before.
             Just scIdx -> do
-                currIdx <- getScopeIdx
-                if scIdx == currIdx
+                currScopeIdx <- getScopeIdx
+                if scIdx == currScopeIdx
                     -- Variable modified in same scope, therefore no action required.
                     then runNest1 k
                     -- Variable modified in a different scope, therefore, update
                     -- set of dirty variables.
                     else do
-                        addDirtyVar v
+                        tell (Set.singleton v)
                         runNest1 k
 
     a (Other op) = Nest1 (Op (fmap runNest1 (R $ R $ R $ R op)))
@@ -175,5 +165,6 @@ handleDirtyVars prog = do
     -- DirtyVars. This ensures local versions are not made inside any local
     -- state scopes.
     let srtScopeIdx = 0
-    (((x, _), _), vs) <- (handleWriter . handleNew (succ srtScopeIdx) . handleReader srtScopeIdx . handleState emptyLastScope . mkCtx) prog
+        handle = handleWriter . handleNew (succ srtScopeIdx) . handleReader srtScopeIdx . handleState emptyLastScope
+    (((x, _), _), vs) <- (handle . mkCtx) prog
     return (x, vs)
