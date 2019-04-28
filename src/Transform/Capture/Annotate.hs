@@ -4,7 +4,11 @@
 {-# LANGUAGE DeriveFunctor, TypeOperators, TypeSynonymInstances, FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses, FlexibleContexts #-}
 
-module DirtyNew where
+module Transform.Capture.Annotate
+( UsedVars
+, Ann(..)
+, annotateAST
+) where
 
 import Data.Set (Set)
 import qualified Data.Set as Set
