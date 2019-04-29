@@ -149,12 +149,12 @@ data Env = Env {
 --
 -- restoreEnv :: Env -> Env -> Env
 -- restoreEnv old new = old { funcs = funcs new }
---
--- lookupFuncVars :: SrcProc -> Env -> (Set SrcVar, Set SrcVar)
--- lookupFuncVars pname env =
---     case Map.lookup pname (funcVarLocs env) of
---         Nothing   -> error ("No function named " ++ show pname)
---         Just locs -> locs
+
+lookupFuncVars :: SrcProc -> Env -> (Set SrcVar, Set SrcVar)
+lookupFuncVars pname env =
+    case Map.lookup pname (funcVarLocs env) of
+        Nothing   -> error ("No function named " ++ show pname)
+        Just locs -> locs
 
 --------------------------------------------------------------------------------
 -- Semantics
@@ -168,10 +168,15 @@ gen x = Nest1 (return (NZ1 x))
 
 alg :: (Functor f, Functor g) => Alg (CodeGen :+: f) (FuncScope :+: g) (Carrier f g a)
 alg = A a d p where
-    a :: (CodeGen :+: f) (Carrier f g a n) -> Carrier f g a n
-    a = undefined
+    a :: (Functor f, Functor g) => (CodeGen :+: f) (Carrier f g a n) -> Carrier f g a n
+    a (EmitFunc func k)   = Nest1 $ tell [func] >> runNest1 k
+    a (VarSPOffset v fk)  = Nest1 $ ask >>= \env -> runNest1 (fk (spOffset env v))
+    a (VarType v fk)      = Nest1 $ ask >>= \env -> runNest1 (fk (currVarType env v))
+    a (SPName fk)         = Nest1 $ ask >>= \env -> runNest1 (fk (globalSPName env))
+    a (DirtyVars fk)      = Nest1 $ ask >>= \env -> runNest1 (fk (dirty env))
+    a (FuncVars pname fk) = Nest1 $ ask >>= \env -> runNest1 (fk (lookupFuncVars pname env))
 
-    d :: (FuncScope :+: g) (Carrier f g a ('S n)) -> Carrier f g a n
+    d :: (Functor f, Functor g) => (FuncScope :+: g) (Carrier f g a ('S n)) -> Carrier f g a n
     d = undefined
 
     p :: Carrier f g a n -> Carrier f g a ('S n)
