@@ -12,8 +12,8 @@ module Back.CodeGen
 , SPOffset
 , LocType(..)
 , ValType(..)
-, Emit
-, Block
+, CodeGen
+, FuncScope
 , Env(..)
 , emitFunc
 , spName
@@ -33,8 +33,11 @@ import qualified Data.Map as Map
 import Back.WASM hiding (funcs)
 import Transform.Rename.Rename (FreshName)
 import Helper.Scope.Prog
+import Helper.Scope.Nest
 import Helper.Co
 import Helper.Inj
+import Helper.Eff.Reader
+import Helper.Eff.Writer
 
 --------------------------------------------------------------------------------
 -- Syntax
@@ -62,8 +65,8 @@ data ValType v
     | Ptr v
     deriving (Eq, Show, Functor)
 
-data Emit k
-    -- Emit a WebAssembly function containing the given WASM as its body.
+data CodeGen k
+    -- CodeGen a WebAssembly function containing the given WASM as its body.
     = EmitFunc Func k
     -- Get offset of a local variable from the stack pointer.
     | VarSPOffset SrcVar (Word -> k)
@@ -81,31 +84,31 @@ data Emit k
     | FuncVars SrcProc ((Set SrcVar, Set SrcVar) -> k)
     deriving Functor
 
-data Block k
+data FuncScope k
     -- Inside scope, use of VarSPOffset and VarType will use functions
     -- passed to FuncScope.
     = FuncScope (SrcVar -> LocType (ValType SrcVar)) (SrcVar -> SPOffset) k
     deriving Functor
 
-emitFunc :: Emit :<: f => Func -> Prog f g ()
+emitFunc :: CodeGen :<: f => Func -> Prog f g ()
 emitFunc func = injectP (EmitFunc func (Var ()))
 
-spName :: Emit :<: f => Prog f g GlobalName
+spName :: CodeGen :<: f => Prog f g GlobalName
 spName = injectP (SPName Var)
 
-varSPOffset :: Emit :<: f => SrcVar -> Prog f g Word
+varSPOffset :: CodeGen :<: f => SrcVar -> Prog f g Word
 varSPOffset v = injectP (VarSPOffset v Var)
 
-funcVars :: Emit :<: f => SrcProc -> Prog f g (Set SrcVar, Set SrcVar)
+funcVars :: CodeGen :<: f => SrcProc -> Prog f g (Set SrcVar, Set SrcVar)
 funcVars pname = injectP (FuncVars pname Var)
 
-varType :: Emit :<: f => SrcVar -> Prog f g (LocType (ValType SrcVar))
+varType :: CodeGen :<: f => SrcVar -> Prog f g (LocType (ValType SrcVar))
 varType v = injectP (VarType v Var)
 
-dirtyVars :: Emit :<: f => Prog f g (Set SrcVar)
+dirtyVars :: CodeGen :<: f => Prog f g (Set SrcVar)
 dirtyVars = injectP (DirtyVars Var)
 
-funcScope :: (Functor f, Block :<: g)
+funcScope :: (Functor f, FuncScope :<: g)
           => (SrcVar -> LocType (ValType SrcVar))
           -> (SrcVar -> SPOffset)
           -> Prog f g a
@@ -118,62 +121,95 @@ funcScope varType spOffset inner
 --------------------------------------------------------------------------------
 
 data Env = Env {
-    funcs        :: [Func]
-  , currVarType  :: SrcVar -> (LocType (ValType SrcVar))
-  , spOffset     :: SrcVar -> SPOffset
-  , globalSPName :: GlobalName
-  , dirty        :: Set SrcVar
-  , funcVarLocs  :: Map SrcProc (Set SrcVar, Set SrcVar)
+      currVarType  :: SrcVar -> (LocType (ValType SrcVar))
+    , spOffset     :: SrcVar -> SPOffset
+    , globalSPName :: GlobalName
+    , dirty        :: Set SrcVar
+    , funcVarLocs  :: Map SrcProc (Set SrcVar, Set SrcVar)
 }
 
-addFunc :: Func -> Env -> Env
-addFunc func env = env { funcs = func:(funcs env) }
-
-restoreEnv :: Env -> Env -> Env
-restoreEnv old new = old { funcs = funcs new }
-
-lookupFuncVars :: SrcProc -> Env -> (Set SrcVar, Set SrcVar)
-lookupFuncVars pname env =
-    case Map.lookup pname (funcVarLocs env) of
-        Nothing   -> error ("No function named " ++ show pname)
-        Just locs -> locs
+-- data Env = Env {
+--     funcs        :: [Func]
+--   , currVarType  :: SrcVar -> (LocType (ValType SrcVar))
+--   , spOffset     :: SrcVar -> SPOffset
+--   , globalSPName :: GlobalName
+--   , dirty        :: Set SrcVar
+--   , funcVarLocs  :: Map SrcProc (Set SrcVar, Set SrcVar)
+-- }
+--
+-- addFunc :: Func -> Env -> Env
+-- addFunc func env = env { funcs = func:(funcs env) }
+--
+-- restoreEnv :: Env -> Env -> Env
+-- restoreEnv old new = old { funcs = funcs new }
+--
+-- lookupFuncVars :: SrcProc -> Env -> (Set SrcVar, Set SrcVar)
+-- lookupFuncVars pname env =
+--     case Map.lookup pname (funcVarLocs env) of
+--         Nothing   -> error ("No function named " ++ show pname)
+--         Just locs -> locs
 
 --------------------------------------------------------------------------------
 -- Semantics
 --------------------------------------------------------------------------------
 
-data Carrier a n = CG { runCG :: Env -> (Carrier' a n, Env) }
+-- type Op  f v   = State (Names v)   :+: New Word :+: f
+-- type Sc  g v   = LocalSt (Names v) :+: g
+-- type Ctx f g v = Prog (Op f v) (Sc g v)
+--
+-- -- Use Nest1 to factor out Carrier and Carrier'
+-- type Carrier f g v = Nest1 (Ctx f g v)
 
-data Carrier' a :: Nat -> * where
-    CZ :: a -> Carrier' a 'Z
-    CS :: (Env -> (Carrier' a n, Env)) -> Carrier' a ('S n)
+type Ctx     f g = Prog (Tell [Func] :+: Ask Env :+: f) (LocalR Env :+: g)
+type Carrier f g = Nest1 (Ctx f g)
 
-gen :: a -> Carrier a 'Z
-gen wasm = CG (\env -> (CZ wasm, env))
+delegate :: Prog (CodeGen :+: f) (FuncScope :+: g) a -> Ctx f g a
+delegate = undefined
 
--- NOTE: Pattern matching on Other is not required here because this is not a
--- composite effect handler.
-alg :: Alg Emit Block (Carrier a)
-alg = A a d p where
-    a :: Emit (Carrier a n) -> Carrier a n
-    a (EmitFunc func k)   = CG $ \env -> runCG k (addFunc func env)
-    a (VarSPOffset v fk)  = CG $ \env -> runCG (fk (spOffset env v)) env
-    a (VarType v fk)      = CG $ \env -> runCG (fk (currVarType env v)) env
-    a (SPName fk)         = CG $ \env -> runCG (fk (globalSPName env)) env
-    a (DirtyVars fk)      = CG $ \env -> runCG (fk (dirty env)) env
-    a (FuncVars pname fk) = CG $ \env -> runCG (fk (lookupFuncVars pname env)) env
+handleCodeGen :: (Functor f, Functor g) => Env -> Prog (CodeGen :+: f) (FuncScope :+: g) a -> Prog f g (a, [Func])
+handleCodeGen env = handleReader env . handleWriter . delegate
 
-    d :: Block (Carrier a ('S n)) -> Carrier a n
-    d (FuncScope varType spOffset inner) = CG $ \env ->
-        let env' = env { currVarType=varType, spOffset=spOffset }
-        in case runCG inner env of
-            -- Make new environment contain emitted functions.
-            (CS k, env'') -> k (restoreEnv env env'')
+-- handleRename :: (Functor f, Functor g, Ord v) => Prog (Fresh v :+: f) (Rename v :+: g) a -> Prog f g (a, FreshName)
+-- handleRename prog = do
+--     -- Discard resulting Names, and next fresh.
+--     -- The fresh is global, indicated by wrapping around the state. Therefore,
+--     -- getting a new fresh inside scoped state still gives a globally fresh
+--     -- value.
+--     ((x, st), fresh) <- (handleNew 0 . handleState emptyNames . mkCtx) prog
+--     return (x, fresh)
 
-    p :: Carrier a n -> Carrier a ('S n)
-    p (CG runCG) = CG $ \env -> (CS runCG, env)
-
-handleCodeGen :: Env -> Prog Emit Block a -> (a, [Func])
-handleCodeGen env prog =
-    case runCG (run gen alg prog) env of
-        (CZ wasm, env') -> (wasm, funcs env')
+-- data Carrier a n = CG { runCG :: Env -> (Carrier' a n, Env) }
+--
+-- data Carrier' a :: Nat -> * where
+--     CZ :: a -> Carrier' a 'Z
+--     CS :: (Env -> (Carrier' a n, Env)) -> Carrier' a ('S n)
+--
+-- gen :: a -> Carrier a 'Z
+-- gen wasm = CG (\env -> (CZ wasm, env))
+--
+-- -- NOTE: Pattern matching on Other is not required here because this is not a
+-- -- composite effect handler.
+-- alg :: Alg CodeGen FuncScope (Carrier a)
+-- alg = A a d p where
+--     a :: CodeGen (Carrier a n) -> Carrier a n
+--     a (EmitFunc func k)   = CG $ \env -> runCG k (addFunc func env)
+--     a (VarSPOffset v fk)  = CG $ \env -> runCG (fk (spOffset env v)) env
+--     a (VarType v fk)      = CG $ \env -> runCG (fk (currVarType env v)) env
+--     a (SPName fk)         = CG $ \env -> runCG (fk (globalSPName env)) env
+--     a (DirtyVars fk)      = CG $ \env -> runCG (fk (dirty env)) env
+--     a (FuncVars pname fk) = CG $ \env -> runCG (fk (lookupFuncVars pname env)) env
+--
+--     d :: FuncScope (Carrier a ('S n)) -> Carrier a n
+--     d (FuncScope varType spOffset inner) = CG $ \env ->
+--         let env' = env { currVarType=varType, spOffset=spOffset }
+--         in case runCG inner env of
+--             -- Make new environment contain emitted functions.
+--             (CS k, env'') -> k (restoreEnv env env'')
+--
+--     p :: Carrier a n -> Carrier a ('S n)
+--     p (CG runCG) = CG $ \env -> (CS runCG, env)
+--
+-- handleCodeGen :: Env -> Prog CodeGen FuncScope a -> (a, [Func])
+-- handleCodeGen env prog =
+--     case runCG (run gen alg prog) env of
+--         (CZ wasm, env') -> (wasm, funcs env')
