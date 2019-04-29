@@ -12,7 +12,7 @@ module Back.CodeGen
 , SPOffset
 , LocType(..)
 , ValType(..)
-, CodeGen
+, Emit
 , FuncScope
 , Env(..)
 , emitFunc
@@ -66,7 +66,7 @@ data ValType v
     | Ptr v
     deriving (Eq, Show, Functor)
 
-data CodeGen k
+data Emit k
     -- CodeGen a WebAssembly function containing the given WASM as its body.
     = EmitFunc' Func k
     -- Get offset of a local variable from the stack pointer.
@@ -92,27 +92,27 @@ data FuncScope k
     deriving Functor
 
 pattern EmitFunc f k <- (prj -> Just (EmitFunc' f k))
-emitFunc :: CodeGen :<: f => Func -> Prog f g ()
+emitFunc :: Emit :<: f => Func -> Prog f g ()
 emitFunc func = injectP (EmitFunc' func (Var ()))
 
 pattern SPName k <- (prj -> Just (SPName' k))
-spName :: CodeGen :<: f => Prog f g GlobalName
+spName :: Emit :<: f => Prog f g GlobalName
 spName = injectP (SPName' Var)
 
 pattern VarSPOffset v k <- (prj -> Just (VarSPOffset' v k))
-varSPOffset :: CodeGen :<: f => SrcVar -> Prog f g Word
+varSPOffset :: Emit :<: f => SrcVar -> Prog f g Word
 varSPOffset v = injectP (VarSPOffset' v Var)
 
 pattern FuncVars p k <- (prj -> Just (FuncVars' p k))
-funcVars :: CodeGen :<: f => SrcProc -> Prog f g (Set SrcVar, Set SrcVar)
+funcVars :: Emit :<: f => SrcProc -> Prog f g (Set SrcVar, Set SrcVar)
 funcVars pname = injectP (FuncVars' pname Var)
 
 pattern VarType v k <- (prj -> Just (VarType' v k))
-varType :: CodeGen :<: f => SrcVar -> Prog f g (LocType (ValType SrcVar))
+varType :: Emit :<: f => SrcVar -> Prog f g (LocType (ValType SrcVar))
 varType v = injectP (VarType' v Var)
 
 pattern DirtyVars k <- (prj -> Just (DirtyVars' k))
-dirtyVars :: CodeGen :<: f => Prog f g (Set SrcVar)
+dirtyVars :: Emit :<: f => Prog f g (Set SrcVar)
 dirtyVars = injectP (DirtyVars' Var)
 
 pattern FuncScope varType spOffset k <- (prj -> Just (FuncScope' varType spOffset k))
@@ -152,9 +152,9 @@ type Carrier f g = Nest1 (Ctx f g)
 gen :: (Functor f, Functor g) => a -> Carrier f g a 'Z
 gen x = Nest1 (return (NZ1 x))
 
-alg :: (Functor f, Functor g) => Alg (CodeGen :+: f) (FuncScope :+: g) (Carrier f g a)
+alg :: (Functor f, Functor g) => Alg (Emit :+: f) (FuncScope :+: g) (Carrier f g a)
 alg = A a d p where
-    a :: (Functor f, Functor g) => (CodeGen :+: f) (Carrier f g a n) -> Carrier f g a n
+    a :: (Functor f, Functor g) => (Emit :+: f) (Carrier f g a n) -> Carrier f g a n
     a (EmitFunc func k)   = Nest1 $ tell [func] >> runNest1 k
     a (VarSPOffset v fk)  = Nest1 $ ask >>= \env -> runNest1 (fk (spOffset env v))
     a (VarType v fk)      = Nest1 $ ask >>= \env -> runNest1 (fk (currVarType env v))
@@ -180,9 +180,9 @@ alg = A a d p where
     p :: (Functor f, Functor g) => Carrier f g a n -> Carrier f g a ('S n)
     p (Nest1 runNest1) = Nest1 (return (NS1 runNest1))
 
-delegate :: (Functor f, Functor g) => Prog (CodeGen :+: f) (FuncScope :+: g) a -> Ctx f g a
+delegate :: (Functor f, Functor g) => Prog (Emit :+: f) (FuncScope :+: g) a -> Ctx f g a
 delegate prog = case run gen alg prog of
     (Nest1 prog') -> fmap (\(NZ1 x) -> x) prog'
 
-handleCodeGen :: (Functor f, Functor g) => Env -> Prog (CodeGen :+: f) (FuncScope :+: g) a -> Prog f g (a, [Func])
+handleCodeGen :: (Functor f, Functor g) => Env -> Prog (Emit :+: f) (FuncScope :+: g) a -> Prog f g (a, [Func])
 handleCodeGen env = handleReader env . handleWriter . delegate
