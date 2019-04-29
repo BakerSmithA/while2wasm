@@ -112,7 +112,7 @@ instance FreeAlg (ProcStm SrcProc) (CodeGen WASM) where
 -- NOTE: Using Prog to represent WebAssembly allows generation to be very
 -- natural, with output looking like WebAssembly code.
 instance FreeAlg Stm (CodeGen WASM) where
-    alg (Skip)            = return nop
+    alg (Skip)            = return (return ())
     alg (Comp s1 s2)      = s1 >>> s2
     alg (Export x)        = x >>> return ret
     alg (If cond t e)     = cond >>> ifElse <$> t <*> e
