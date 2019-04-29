@@ -17,7 +17,7 @@ cabal-version:       >=1.10
 
 executable w2w
   main-is:             Main.hs
-  ghc-options:         -Wno-missing-signatures -Wno-orphans -O2 -fprof-auto
+  ghc-options:         -Wno-missing-signatures -Wno-orphans -O2 -fprof-auto -prof
   -- other-modules:
   -- other-extensions:
   build-depends:       base
