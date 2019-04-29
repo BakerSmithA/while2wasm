@@ -23,6 +23,7 @@ import qualified Data.Map as Map
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Helper.Scope.Prog
+import Helper.Scope.Nest
 import Helper.Co
 import Helper.Inj
 import Helper.Eff
@@ -85,16 +86,11 @@ emptyLastScope = Map.empty
 -- Only need a reader for keeping track of the current scope index, because
 -- the index only changes when entering scope, therefore this can be done
 -- using scope of reader.
-type Op  f v     = State   (LastScope v) :+: Ask    ScopeIdx :+: New Word :+: Tell (DirtyVars v) :+: f
-type Sc  g v     = LocalSt (LastScope v) :+: LocalR ScopeIdx :+: g
-type Ctx f g v a = Prog (Op f v) (Sc g v) a
+type Op  f v   = State   (LastScope v) :+: Ask    ScopeIdx :+: New Word :+: Tell (DirtyVars v) :+: f
+type Sc  g v   = LocalSt (LastScope v) :+: LocalR ScopeIdx :+: g
+type Ctx f g v = Prog (Op f v) (Sc g v)
 
-data CarrierD f g v a n
-    = D { runD :: Ctx f g v (CarrierD' f g v a n) }
-
-data CarrierD' f g v a :: Nat -> * where
-    CZ :: a -> CarrierD' f g v a 'Z
-    CS :: (Ctx f g v (CarrierD' f g v a n)) -> CarrierD' f g v a ('S n)
+type CarrierD f g v a = Nest1 (Ctx f g v) a
 
 getLastScope :: (Functor f, Functor g) => Ctx f g v (LastScope v)
 getLastScope = get
@@ -105,64 +101,61 @@ getScopeIdx = ask
 newScopeIdx :: (Functor f, Functor g) => Ctx f g v ScopeIdx
 newScopeIdx = new
 
-addDirtyVar :: (Functor f, Functor g, Ord v) => v -> Ctx f g v ()
-addDirtyVar = tell . Set.singleton
-
 genD :: (Functor f, Functor g) => a -> CarrierD f g v a 'Z
-genD x = D (return (CZ x))
+genD x = Nest1 (return (NZ1 x))
 
 algD :: (Functor f, Functor g, Ord v) => Alg (Modified v :+: f) (ModScope :+: g) (CarrierD f g v a)
 algD = A a d p where
     a ::  (Functor f, Functor g, Ord v) => (Modified v :+: f) (CarrierD f g v a n) -> CarrierD f g v a n
     -- Tells environment a variable was modified. If modified in two different
     -- scopes then make a dirty variable.
-    a (Modified v k) = D $ do
-        lastScope <- getLastScope
-        case v `Map.lookup` lastScope of
+    a (Modified v k) = Nest1 $ do
+        varScopes <- getLastScope
+        case v `Map.lookup` varScopes of
             -- Variable never seen before, therefore the scope the variable
             -- was seen at is the current scope index.
             Nothing    -> do
-                currIdx <- getScopeIdx
-                put (Map.insert v currIdx lastScope)
-                runD k
+                currScopeIdx <- getScopeIdx
+                put (Map.insert v currScopeIdx varScopes)
+                runNest1 k
 
             -- Variable has been seen before.
             Just scIdx -> do
-                currIdx <- getScopeIdx
-                if scIdx == currIdx
+                currScopeIdx <- getScopeIdx
+                if scIdx == currScopeIdx
                     -- Variable modified in same scope, therefore no action required.
-                    then runD k
+                    then runNest1 k
                     -- Variable modified in a different scope, therefore, update
                     -- set of dirty variables.
                     else do
-                        addDirtyVar v
-                        runD k
+                        tell (Set.singleton v)
+                        runNest1 k
 
-    a (Other op) = D (Op' (fmap runD (R $ R $ R $ R op)))
+    a (Other op) = Nest1 (Op' (fmap runNest1 (R $ R $ R $ R op)))
 
     d ::  (Functor f, Functor g) => (ModScope :+: g) (CarrierD f g v a ('S n)) -> CarrierD f g v a n
     -- Enters scope, in which if a variable is modified and modified in above
     -- scope then the variable will be made dirty.
-    d (ModScope k) = D $ do
+    d (ModScope k) = Nest1 $ do
         -- Does not change the scope index assigned to this scope, only the
         -- next fresh scope index that will be used.
         newScIdx <- newScopeIdx
         -- Run nested continuation with new scope index.
-        (CS run') <- localR newScIdx (runD k)
+        (NS1 run') <- localR newScIdx (runNest1 k)
         -- Run rest of non-nested continuation.
         run'
 
-    d (Other op) = D (Scope' (fmap (\(D prog) -> fmap f prog) (R $ R op))) where
-        f :: (Functor f, Functor g) => CarrierD' f g v a ('S n) -> Ctx f g v (CarrierD' f g v a n)
-        f (CS prog) = prog
+    d (Other op) = Nest1 (Scope' (fmap (\(Nest1 prog) -> fmap f prog) (R $ R op))) where
+        f :: (Functor f, Functor g) => Nest1' (Ctx f g v) a ('S n) -> Ctx f g v (Nest1' (Ctx f g v) a n)
+        f (NS1 prog) = prog
 
     p ::  (Functor f, Functor g) => CarrierD f g v a n -> CarrierD f g v a ('S n)
-    p (D runD) = D (return (CS runD))
+    p (Nest1 runNest1) = Nest1 (return (NS1 runNest1))
 
 mkCtx :: (Functor f, Functor g, Ord v) => Prog (Modified v :+: f) (ModScope :+: g) a -> Ctx f g v a
 mkCtx prog = case run genD algD prog of
-    (D prog') -> do
-        (CZ x) <- prog'
+    (Nest1 prog') -> do
+        (NZ1 x) <- prog'
         return x
 
 handleDirtyVars :: (Functor f, Functor g, Ord v) => Prog (Modified v :+: f) (ModScope :+: g) a -> Prog f g (a, DirtyVars v)
@@ -172,5 +165,6 @@ handleDirtyVars prog = do
     -- DirtyVars. This ensures local versions are not made inside any local
     -- state scopes.
     let srtScopeIdx = 0
-    (((x, _), _), vs) <- (handleWriter . handleNew (succ srtScopeIdx) . handleReader srtScopeIdx . handleState emptyLastScope . mkCtx) prog
+        handle = handleWriter . handleNew (succ srtScopeIdx) . handleReader srtScopeIdx . handleState emptyLastScope
+    (((x, _), _), vs) <- (handle . mkCtx) prog
     return (x, vs)

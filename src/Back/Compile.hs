@@ -17,8 +17,9 @@ import Helper.Free.Free
 import Helper.Free.Alg
 import Helper.Scope.Prog
 import Helper.Co
+import Helper.Eff.Void
 
-type CodeGen a = Prog Emit Block a
+type CodeGen a = Prog (Emit :+: Void) (FuncScope :+: Void) a
 
 --------------------------------------------------------------------------------
 -- Convenience functions to make converting from While easier
@@ -111,7 +112,7 @@ instance FreeAlg (ProcStm SrcProc) (CodeGen WASM) where
 -- NOTE: Using Prog to represent WebAssembly allows generation to be very
 -- natural, with output looking like WebAssembly code.
 instance FreeAlg Stm (CodeGen WASM) where
-    alg (Skip)            = return nop
+    alg (Skip)            = return (return ())
     alg (Comp s1 s2)      = s1 >>> s2
     alg (Export x)        = x >>> return ret
     alg (If cond t e)     = cond >>> ifElse <$> t <*> e
@@ -215,10 +216,10 @@ compile' :: FreeAlg f (CodeGen WASM)
          -> Free f ()
          -> (WASM, [Func])
 
-compile' spName mainLocals mainParams dirty funcVars ast = handleCodeGen env codeGen where
+compile' spName mainLocals mainParams dirty funcVars ast = handleVoid (handleCodeGen env codeGen) where
     codeGen   = funcWrapper stackSize (mkCodeGen ast)
     stackSize = funcStackSize mainLocals dirty
-    env       = Env [] varType spOffset spName dirty funcVars
+    env       = Env varType spOffset spName dirty funcVars
     varType   = makeVarType mainLocals mainParams dirty
     spOffset  = makeVarSPOffset mainLocals dirty
 
