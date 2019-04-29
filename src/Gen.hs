@@ -14,5 +14,4 @@ progRec 0 = Export (Ident "x")
 progRec n = block (progRec (n-1))
 
 progLin :: Int -> Stm
-progLin 0 = Export (Ident "x")
-progLin n = Assign "x" (Num 1) `Comp` (progLin (n-1))
+progLin n = foldr1 Comp (replicate n (Assign "x" (Num 1)))

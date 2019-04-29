@@ -47,5 +47,5 @@ main = do
     args <- getArgs
     let usageMsg = "Useage example: w2w <depth> <out_file>"
     case args of
-        [depth, outPath] -> runComp' (progRec (read depth)) outPath
+        [depth, outPath] -> runComp' (progLin (read depth)) outPath
         _                -> error usageMsg
