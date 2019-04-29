@@ -67,54 +67,61 @@ data ValType v
 
 data CodeGen k
     -- CodeGen a WebAssembly function containing the given WASM as its body.
-    = EmitFunc Func k
+    = EmitFunc' Func k
     -- Get offset of a local variable from the stack pointer.
-    | VarSPOffset SrcVar (Word -> k)
+    | VarSPOffset' SrcVar (Word -> k)
     -- Returns the type of a variable, in the current function, given its name.
     -- Used to inform how the variable should be accessed.
-    | VarType SrcVar (LocType (ValType SrcVar) -> k)
+    | VarType' SrcVar (LocType (ValType SrcVar) -> k)
     -- Get name of stack pointer, which can be used to load variables from
     -- function's stack frame.
-    | SPName (GlobalName -> k)
+    | SPName' (GlobalName -> k)
     -- Return variables which are modified in two different scopes.
     -- In WebAssembly, these variables are stored on the stack.
-    | DirtyVars (Set SrcVar -> k)
+    | DirtyVars' (Set SrcVar -> k)
     -- Get local variables and parameters to a function. Used when emitting a
     -- or calling a function.
-    | FuncVars SrcProc ((Set SrcVar, Set SrcVar) -> k)
+    | FuncVars' SrcProc ((Set SrcVar, Set SrcVar) -> k)
     deriving Functor
 
 data FuncScope k
     -- Inside scope, use of VarSPOffset and VarType will use functions
     -- passed to FuncScope.
-    = FuncScope (SrcVar -> LocType (ValType SrcVar)) (SrcVar -> SPOffset) k
+    = FuncScope' (SrcVar -> LocType (ValType SrcVar)) (SrcVar -> SPOffset) k
     deriving Functor
 
+pattern EmitFunc f k <- (prj -> Just (EmitFunc' f k))
 emitFunc :: CodeGen :<: f => Func -> Prog f g ()
-emitFunc func = injectP (EmitFunc func (Var ()))
+emitFunc func = injectP (EmitFunc' func (Var ()))
 
+pattern SPName k <- (prj -> Just (SPName' k))
 spName :: CodeGen :<: f => Prog f g GlobalName
-spName = injectP (SPName Var)
+spName = injectP (SPName' Var)
 
+pattern VarSPOffset v k <- (prj -> Just (VarSPOffset' v k))
 varSPOffset :: CodeGen :<: f => SrcVar -> Prog f g Word
-varSPOffset v = injectP (VarSPOffset v Var)
+varSPOffset v = injectP (VarSPOffset' v Var)
 
+pattern FuncVars p k <- (prj -> Just (FuncVars' p k))
 funcVars :: CodeGen :<: f => SrcProc -> Prog f g (Set SrcVar, Set SrcVar)
-funcVars pname = injectP (FuncVars pname Var)
+funcVars pname = injectP (FuncVars' pname Var)
 
+pattern VarType v k <- (prj -> Just (VarType' v k))
 varType :: CodeGen :<: f => SrcVar -> Prog f g (LocType (ValType SrcVar))
-varType v = injectP (VarType v Var)
+varType v = injectP (VarType' v Var)
 
+pattern DirtyVars k <- (prj -> Just (DirtyVars' k))
 dirtyVars :: CodeGen :<: f => Prog f g (Set SrcVar)
-dirtyVars = injectP (DirtyVars Var)
+dirtyVars = injectP (DirtyVars' Var)
 
+pattern FuncScope varType spOffset k <- (prj -> Just (FuncScope' varType spOffset k))
 funcScope :: (Functor f, FuncScope :<: g)
           => (SrcVar -> LocType (ValType SrcVar))
           -> (SrcVar -> SPOffset)
           -> Prog f g a
           -> Prog f g a
 funcScope varType spOffset inner
-    = injectPSc (fmap (fmap return) (FuncScope varType spOffset inner))
+    = injectPSc (fmap (fmap return) (FuncScope' varType spOffset inner))
 
 --------------------------------------------------------------------------------
 -- Aux Semantics
@@ -153,18 +160,26 @@ data Env = Env {
 -- Semantics
 --------------------------------------------------------------------------------
 
--- type Op  f v   = State (Names v)   :+: New Word :+: f
--- type Sc  g v   = LocalSt (Names v) :+: g
--- type Ctx f g v = Prog (Op f v) (Sc g v)
---
--- -- Use Nest1 to factor out Carrier and Carrier'
--- type Carrier f g v = Nest1 (Ctx f g v)
-
 type Ctx     f g = Prog (Tell [Func] :+: Ask Env :+: f) (LocalR Env :+: g)
 type Carrier f g = Nest1 (Ctx f g)
 
-delegate :: Prog (CodeGen :+: f) (FuncScope :+: g) a -> Ctx f g a
-delegate = undefined
+gen :: (Functor f, Functor g) => a -> Carrier f g a 'Z
+gen x = Nest1 (return (NZ1 x))
+
+alg :: (Functor f, Functor g) => Alg (CodeGen :+: f) (FuncScope :+: g) (Carrier f g a)
+alg = A a d p where
+    a :: (CodeGen :+: f) (Carrier f g a n) -> Carrier f g a n
+    a = undefined
+
+    d :: (FuncScope :+: g) (Carrier f g a ('S n)) -> Carrier f g a n
+    d = undefined
+
+    p :: Carrier f g a n -> Carrier f g a ('S n)
+    p = undefined
+
+delegate :: (Functor f, Functor g) => Prog (CodeGen :+: f) (FuncScope :+: g) a -> Ctx f g a
+delegate prog = case run gen alg prog of
+    (Nest1 prog') -> fmap (\(NZ1 x) -> x) prog'
 
 handleCodeGen :: (Functor f, Functor g) => Env -> Prog (CodeGen :+: f) (FuncScope :+: g) a -> Prog f g (a, [Func])
 handleCodeGen env = handleReader env . handleWriter . delegate
