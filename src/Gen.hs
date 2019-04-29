@@ -2,10 +2,17 @@
 -- Since Megaparsec is not built for profiling, need to manually generate
 -- While which can be compiled.
 
-module Gen (prog) where
+module Gen where
 
 import Front.Parse.Rec
 
-prog :: Int -> Stm
-prog 0 = Export (Ident "x")
-prog n = Assign "x" (Num 1) `Comp` prog (n-1)
+block :: Stm -> Stm
+block body = Block [("x", Num 1)] [("p", body)] body
+
+progRec :: Int -> Stm
+progRec 0 = Export (Ident "x")
+progRec n = block (progRec (n-1))
+
+progLin :: Int -> Stm
+progLin 0 = Export (Ident "x")
+progLin n = Assign "x" (Num 1) `Comp` (progLin (n-1))
