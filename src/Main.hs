@@ -13,6 +13,7 @@ import Transform.Rename.Rename
 import Transform.Capture.Dirty
 import Transform.Capture.Location
 import Back.Compile
+import Back.WASM
 import Back.WAT
 import Helper.Free.Free
 import Helper.Co
@@ -35,9 +36,11 @@ runComp' parsed outPath = do
         (mainVars, funcVars) = procVarLocations renamed
 
     let wasmModule = compile nextProc mainVars funcVars dirty renamed
-        wat        = docModule wasmModule
+    putStrLn (show (globals wasmModule))
 
-    writeFile outPath (Pretty.toString 0 wat)
+        -- wat        = docModule wasmModule
+
+    -- writeFile outPath (Pretty.toString 0 wat)
 
 main :: IO ()
 main = do
