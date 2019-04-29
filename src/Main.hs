@@ -13,6 +13,7 @@ import Transform.Rename.Rename
 import Transform.Capture.Dirty
 import Transform.Capture.Location
 import Back.Compile
+import Back.WASM
 import Back.WAT
 import Helper.Free.Free
 import Helper.Co
@@ -35,41 +36,11 @@ runComp' parsed outPath = do
         (mainVars, funcVars) = procVarLocations renamed
 
     let wasmModule = compile nextProc mainVars funcVars dirty renamed
-        wat        = docModule wasmModule
+    putStrLn (show (globals wasmModule))
 
-    writeFile outPath (Pretty.toString 0 wat)
+        -- wat        = docModule wasmModule
 
--- runComp :: FilePath -> FilePath -> IO ()
--- runComp inPath outPath = do
---     contents <- readFile inPath
---     case runParser stms inPath contents of
---         Left err -> putStrLn (errorBundlePretty err)
---         Right parsed -> do
---             let ast =  free parsed   :: While Ident Ident
---             (renamed, nextProc) <- tryRename ast
---
---             let dirty = dirtyVars renamed :: Set FreshName
---                 (mainVars, funcVars) = procVarLocations renamed
---
---             let wasmModule = compile nextProc mainVars funcVars dirty renamed
---                 wat        = docModule wasmModule
---
---             putStrLn (show parsed)
-
-            -- putStrLn "-- Parsed --"
-            -- putStrLn (Pretty.toString 1 $ docAST ast)
-            --
-            -- putStrLn "\n-- Renamed --"
-            -- putStrLn (Pretty.toString 1 $ docAST renamed)
-            --
-            -- putStrLn "\n-- Analysis --"
-            -- putStrLn $ "  Dirty vars: " ++ show (Set.elems dirty)
-            --
-            -- putStrLn "\n-- WASM --"
-            -- putStrLn (Pretty.toString 1 $ wat)
-            -- putStrLn ""
-
-            -- writeFile outPath (Pretty.toString 0 wat)
+    -- writeFile outPath (Pretty.toString 0 wat)
 
 main :: IO ()
 main = do

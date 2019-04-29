@@ -164,7 +164,7 @@ data Mutability
     deriving (Eq, Show)
 
 -- Global variables available to all functions, with an initial value.
-data Global = Global GlobalName Mutability Integer
+data Global = Global GlobalName Mutability Integer deriving Show
 
 -- TODO: Check this is min addr
 type MinAddr = Word32
