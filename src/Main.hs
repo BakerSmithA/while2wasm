@@ -38,18 +38,18 @@ runComp inPath outPath = do
             let wasmModule = compile nextProc mainVars funcVars dirty renamed
                 wat        = docModule wasmModule
 
-            -- putStrLn "-- Parsed --"
-            -- putStrLn (Pretty.toString 1 $ docAST ast)
-            --
-            -- putStrLn "\n-- Renamed --"
-            -- putStrLn (Pretty.toString 1 $ docAST renamed)
-            --
-            -- putStrLn "\n-- Analysis --"
-            -- putStrLn $ "  Dirty vars: " ++ show (Set.elems dirty)
-            --
-            -- putStrLn "\n-- WASM --"
-            -- putStrLn (Pretty.toString 1 $ wat)
-            -- putStrLn ""
+            putStrLn "-- Parsed --"
+            putStrLn (Pretty.toString 1 $ docAST ast)
+
+            putStrLn "\n-- Renamed --"
+            putStrLn (Pretty.toString 1 $ docAST renamed)
+
+            putStrLn "\n-- Analysis --"
+            putStrLn $ "  Dirty vars: " ++ show (Set.elems dirty)
+
+            putStrLn "\n-- WASM --"
+            putStrLn (Pretty.toString 1 $ wat)
+            putStrLn ""
 
             writeFile outPath (Pretty.toString 0 wat)
 
