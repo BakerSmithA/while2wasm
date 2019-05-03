@@ -47,15 +47,6 @@ catch hdl k = injectPSc (fmap (fmap return) (Catch' hdl k))
 -- Semantics
 --------------------------------------------------------------------------------
 
--- Each time a catch is encountered, a new level of scope is entered and
--- a new handler is added to the top of 'stack'. This is the handler that will
--- be used if an exception is encountered inside the catch.
---
--- TODO
--- Therefore, the carrier we use is a stack of n error handlers, where Ntohing
--- is used to tie the recursive knot:
---  m (Either a e)
-
 data CarrierExc f g e a (n :: Nat)
     = Exc { runExc :: Prog f g (Either e (CarrierExc' f g e a n)) }
 
