@@ -78,6 +78,19 @@ fold alg (Scope sc) = d alg (fmap (fold alg . fmap (p alg . fold alg)) sc)
 run :: (Functor f, Functor g) => (r -> a 'Z) -> Alg f g a -> Prog f g r -> a 'Z
 run gen alg prog = fold alg (fmap gen prog)
 
+data AlgM (f :: * -> *) (g :: * -> *) (m :: * -> *) (a :: Nat -> *) = AT {
+    aT :: forall n. f (m (a n)) -> m (a n)
+  , dT :: forall n. g (m (a ('S n))) -> m (a n)
+  , pT :: forall n. m (a n) -> m (a ('S n))
+}
+
+foldM :: (Functor f, Functor g, Monad m) => AlgM f g m a -> Prog f g (m (a n)) -> m (a n)
+foldM _   (Var x)    = x
+foldM alg (Op op)    = aT alg (fmap (foldM alg) op)
+foldM alg (Scope sc) = dT alg (fmap (foldM alg . fmap (pT alg . foldM alg)) sc)
+
+runM :: (Functor f, Functor g, Monad m) => (r -> m (a 'Z)) -> AlgM f g m a -> Prog f g r -> m (a 'Z)
+runM gen alg prog = foldM alg (fmap gen prog)
 --------------------------------------------------------------------------------
 -- Conversion from Recursive
 --------------------------------------------------------------------------------
