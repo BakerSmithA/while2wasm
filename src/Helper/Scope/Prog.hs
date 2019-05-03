@@ -19,7 +19,7 @@ module Helper.Scope.Prog
 , runId
 ) where
 
-import Data.Functor.Classes (Eq1, eq1, liftEq)
+import Helper.Scope.Nat
 
 data Prog f g a
     -- Leaf node
@@ -54,8 +54,6 @@ instance (Functor f, Functor g) => Monad (Prog f g) where
 --------------------------------------------------------------------------------
 -- Evaluation
 --------------------------------------------------------------------------------
-
-data Nat = Z | S Nat
 
 data Alg f g a = A {
     -- Algebra for normal instructions, i.e. with Op
@@ -100,16 +98,3 @@ data CarrierId a (n :: Nat) = Id { unId :: a }
 runId :: (Functor f, Functor g) => (r -> CarrierId a 'Z) -> Alg f g (CarrierId a) -> Prog f g r -> a
 runId gen alg prog = case run gen alg prog of
     (Id x) -> x
-
---------------------------------------------------------------------------------
--- Equivalence
---------------------------------------------------------------------------------
-
-instance (Eq1 f, Eq1 g) => Eq1 (Prog f g) where
-    liftEq eq (Var   x) (Var   y) = x `eq` y
-    liftEq eq (Op    x) (Op    y) = liftEq (liftEq eq) x y
-    liftEq eq (Scope x) (Scope y) = liftEq (liftEq (liftEq eq)) x y
-    liftEq _  _         _         = False
-
-instance (Eq a, Eq1 f, Eq1 g) => Eq (Prog f g a) where
-    (==) = eq1
