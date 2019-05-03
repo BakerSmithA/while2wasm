@@ -40,7 +40,7 @@ throw :: Throw e :<: f => e -> Prog f g a
 throw err = injectP (Throw' err)
 
 pattern Catch hdl k <- (prj -> Just (Catch' hdl k))
-catch :: (Functor f, Catch e :<: g) => (e -> Prog f g ()) -> Prog f g () -> Prog f g ()
+catch :: (Functor f, Catch e :<: g) => (e -> Prog f g a) -> Prog f g a -> Prog f g a
 catch hdl k = injectPSc (fmap (fmap return) (Catch' hdl k))
 
 --------------------------------------------------------------------------------
