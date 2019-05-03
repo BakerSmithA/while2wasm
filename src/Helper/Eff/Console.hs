@@ -7,9 +7,12 @@
 module Helper.Eff.Console where
 
 import Helper.Scope.Prog
+import Helper.Scope.ProgT (ProgT, AlgT)
+import qualified Helper.Scope.ProgT as T
 import Helper.Co
 import Helper.Inj
 import Helper.Eff
+import Helper.Eff.Void
 
 --------------------------------------------------------------------------------
 -- Syntax
@@ -21,38 +24,57 @@ data Console k
     deriving Functor
 
 pattern Gets fk <- (prj -> Just (Gets' fk))
-gets :: Console :<: f => Prog f g String
-gets = injectP (Gets' Var)
+gets :: Console :<: f => ProgT f g IO String
+gets = undefined
+-- gets = injectP (Gets' Var)
 
 pattern Puts s k <- (prj -> Just (Puts' s k))
-puts :: Console :<: f => String -> Prog f g ()
-puts s = injectP (Puts' s (Var ()))
+puts :: Console :<: f => String -> ProgT f g IO ()
+puts = undefined
+-- puts s = injectP (Puts' s (Var ()))
 
 --------------------------------------------------------------------------------
 -- Semantics
 --------------------------------------------------------------------------------
 
-type Carrier f g a = CarrierId (Prog f g (IO a))
+type Carrier f g a = CarrierId (ProgT f g IO a)
 
-gen :: (Functor f, Functor g) => a -> CarrierId (Prog f g (IO a)) 'Z
-gen x = Id (return (return x))
+gen :: (Functor f, Functor g) => a -> IO (CarrierId (Prog f g a) 'Z)
+gen x = return (Id (return x))
 
-alg :: (Functor f, Functor g) => Alg (Console :+: f) g (CarrierId (Prog f g (IO a)))
-alg = A a d p where
-    a :: (Functor f, Functor g) => (Console :+: f) (CarrierId (Prog f g (IO a)) n) -> CarrierId (Prog f g (IO a)) n
-    a (Gets _) = error "Not done yet"
-    a (Puts s k) = Id $ do
-        k' <- unId k
-        return (do
-            putStrLn s
-            k')
-    a (Other op) = Id (Op (fmap unId op))
+alg :: (Functor f, Functor g) => AlgT (Console :+: f) g IO (CarrierId (Prog f g a))
+alg = T.A a d p where
+    a :: (Functor f, Functor g) => (Console :+: f) (IO (CarrierId (Prog f g a) n)) -> IO (CarrierId (Prog f g a) n)
+    a (Gets fk) = do
+        s <- getLine
+        fk s
 
-    d :: (Functor f, Functor g) => g (CarrierId (Prog f g (IO a)) ('S n)) -> CarrierId (Prog f g (IO a)) n
-    d op = Id $ (Scope (fmap (return . unId) op))
+    a (Puts s k) = do
+        putStrLn s
+        k
 
-    p :: CarrierId (Prog f g (IO a)) n -> CarrierId (Prog f g (IO a)) ('S n)
-    p (Id p) = Id p
+    a (Other op) = undefined
 
-handleConsole :: (Functor f, Functor g) => Prog (Console :+: f) g a -> Prog f g (IO a)
-handleConsole prog = runId gen alg prog
+    d :: g (IO (CarrierId (Prog f g a) ('S n))) -> IO (CarrierId (Prog f g a) n)
+    d = undefined
+
+    p :: IO (CarrierId (Prog f g a) n) -> IO (CarrierId (Prog f g a) ('S n))
+    p = undefined
+
+handleConsole :: (Functor f, Functor g) => ProgT (Console :+: f) g IO a -> IO (Prog f g a)
+handleConsole prog = do
+    x <- T.run gen alg prog
+    return (unId x)
+
+--------------------------------------------------------------------------------
+-- Examples
+--------------------------------------------------------------------------------
+
+ex1 :: ProgT (Console :+: Void) Void IO ()
+ex1 = do
+    undefined
+
+runEx :: ProgT (Console :+: Void) Void IO () -> IO ()
+runEx prog = do
+    x <- handleConsole prog
+    return (handleVoid x)
