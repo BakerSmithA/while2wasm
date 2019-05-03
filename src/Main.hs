@@ -36,6 +36,7 @@ runComp' parsed outPath = do
         (mainVars, funcVars) = procVarLocations renamed
 
     let wasmModule = compile nextProc mainVars funcVars dirty renamed
+    putStrLn (show ast)
     putStrLn (show (globals wasmModule))
 
         -- wat        = docModule wasmModule
