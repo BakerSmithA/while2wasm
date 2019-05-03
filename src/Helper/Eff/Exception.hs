@@ -32,16 +32,16 @@ data Throw e k
 
 -- Catch a thrown error of type e.
 data Catch e k
-    = Catch' (e -> k)
+    = Catch' (e -> k) k
     deriving Functor
 
 pattern Throw err <- (prj -> Just (Throw' err))
 throw :: Throw e :<: f => e -> Prog f g a
 throw err = injectP (Throw' err)
 
-pattern Catch hdl <- (prj -> Just (Catch' hdl))
-catch :: (Functor f, Catch e :<: g) => (e -> Prog f g ()) -> Prog f g ()
-catch hdl = injectPSc (fmap (fmap return) (Catch' hdl))
+pattern Catch hdl k <- (prj -> Just (Catch' hdl k))
+catch :: (Functor f, Catch e :<: g) => (e -> Prog f g ()) -> Prog f g () -> Prog f g ()
+catch hdl k = injectPSc (fmap (fmap return) (Catch' hdl k))
 
 --------------------------------------------------------------------------------
 -- Semantics
@@ -61,7 +61,7 @@ data CarrierExc f g e a (n :: Nat)
 
 data CarrierExc' f g e a :: Nat -> * where
     CZ :: a -> CarrierExc' f g e a 'Z
-    CS :: (Prog f g (Either String (CarrierExc' f g e a n))) -> CarrierExc' f g e a ('S n)
+    CS :: (Prog f g (Either e (CarrierExc' f g e a n))) -> CarrierExc' f g e a ('S n)
 
 genExc :: (Functor f, Functor g) => a -> CarrierExc f g e a 'Z
 genExc x = Exc (return (Right (CZ x)))
@@ -74,16 +74,23 @@ algExc = A a d p where
     a (Other op)  = Exc (Op (fmap runExc op))
 
     d :: (Functor f, Functor g) => (Catch e :+: g) (CarrierExc f g e a ('S n)) -> CarrierExc f g e a n
-    d = undefined
+    d (Catch hdl k) = Exc $ do
+        x <- runExc k
+        case x of
+            Right (CS k') -> k'
+            Left err -> do
+                r <- runExc (hdl err)
+                case r of
+                    Right (CS k') -> k'
+                    Left err      -> return (Left err)
 
-    -- d (Catch hdl) = error "Not implemented"
-    -- d (Other op)  = Exc (Scope (fmap f op)) where
-    --     f :: (Functor f, Functor g) => CarrierExc f g a ('S n) -> Prog f g (Prog f g (Either String (CarrierExc' f g a n)))
-    --     f (Exc runExc) = do
-    --         r <- runExc
-    --         case r of
-    --             Left err     -> return (return (Left err))
-    --             Right (CS x) -> return x
+    d (Other op)  = Exc (Scope (fmap f op)) where
+        f :: (Functor f, Functor g) => CarrierExc f g e a ('S n) -> Prog f g (Prog f g (Either e (CarrierExc' f g e a n)))
+        f (Exc runExc) = do
+            r <- runExc
+            case r of
+                Left err     -> return (return (Left err))
+                Right (CS x) -> return x
 
     p :: (Functor f, Functor g) => CarrierExc f g e a n -> CarrierExc f g e a ('S n)
     p (Exc runExc) = Exc $ do
