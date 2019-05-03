@@ -6,9 +6,13 @@ module Helper.Inj
 , injectF
 , injectP
 , injectPSc
+, injectT
+, injectTSc
 ) where
 
 import Helper.Scope.Prog
+import Helper.Scope.ProgT (ProgT)
+import qualified Helper.Scope.ProgT as T
 import Helper.Free.Free
 import Helper.Co
 
@@ -46,3 +50,9 @@ injectP = Op . inj
 -- Inject into the scoped instruction of a Prog tree.
 injectPSc :: (h :<: g) => h (Prog f g (Prog f g a)) -> Prog f g a
 injectPSc = Scope . inj
+
+injectT :: (Monad m, f :<: h) => f (ProgT h g m a) -> ProgT h g m a
+injectT = T.op . inj
+
+injectTSc :: (Monad m, h :<: g) => h (ProgT f g m (ProgT f g m a)) -> ProgT f g m a
+injectTSc = T.scope . inj

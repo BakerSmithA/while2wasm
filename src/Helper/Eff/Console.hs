@@ -24,8 +24,8 @@ data Console k
     deriving Functor
 
 pattern Gets fk <- (prj -> Just (Gets' fk))
-gets :: Console :<: f => ProgT f g IO String
-gets = undefined
+gets :: Console :<: f => ProgT f g m String
+gets = injectT (Gets' T.Var)
 -- gets = injectP (Gets' Var)
 
 pattern Puts s k <- (prj -> Just (Puts' s k))
