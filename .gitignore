@@ -24,3 +24,4 @@ cabal.project.local~
 examples/*.wat
 examples/*.wasm
 examples/out
+*.svg

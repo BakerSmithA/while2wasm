@@ -1,2 +1,2 @@
-./dist/build/w2w/w2w +RTS -p --RTS $1 out
-rm out
+./dist/build/w2w/w2w +RTS -p -h --RTS $1 out
+hp2pretty w2w.hp
