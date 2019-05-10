@@ -1,5 +1,7 @@
+x := 1;
 begin
-    var x := 1;
-    var y := 2;
-    x := 3
-end
+    var x := 2;
+    var y := 3;
+    x := 4
+end;
+export x
