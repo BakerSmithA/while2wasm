@@ -1,5 +1,5 @@
 # while2wasm
-While to WASM compiler using scoped effect handlers combined with Datatypes a la Carte and Extensible effects. The thesis this work is based on can be found in [DSLs.pdf]().
+While to WASM compiler using scoped effect handlers combined with Datatypes a la Carte and Extensible effects. The thesis this work is based on can be found in [DSLs.pdf](https://github.com/BakerSmithA/while2wasm/blob/master/doc/DSLs.pdf).
 
 # Install
 
